@@ -70,7 +70,12 @@ tally link 12 13 --unlink                    # vuelven a pendientes
 
 tally project jira "Can Doo" off             # su tiempo nunca va a Jira
 tally project jira CDP                       # consulta
+```
 
+`tally map list --json` da una fila por proyecto, con mapeo o sin él (los de bita
+y los que tally tiene marcados), y cada fila lleva `jira: true|false`.
+
+```sh
 tally config get
 tally config set-jira --account-id <id> --atl-site <sitio> --issue-type Tarea
 ```

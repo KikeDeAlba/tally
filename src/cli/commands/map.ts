@@ -1,6 +1,6 @@
 import { UsageError } from '../../errors.ts'
 import { parseCommandArgs, readBoolean, readString } from '../args.ts'
-import { requireBita } from '../../integrations/bita.ts'
+import { requireBita, type BitaProject } from '../../integrations/bita.ts'
 import {
   epicMode,
   projectGoesToJira,
@@ -31,9 +31,14 @@ function readIssueKeyOnBoard(raw: string, jiraProjectKey: string, label: string)
   return issueKey
 }
 
-function parentColumn(mapping: ProjectMapping): string {
-  if (mapping.parentKey) return mapping.parentKey
-  return epicMode(mapping) === 'per-run' ? '(board)' : ''
+type ListRow =
+  | (ProjectMapping & { projectId: number; epicMode: ReturnType<typeof epicMode>; jira: boolean })
+  | { projectId: number; projectName: string; jiraProjectKey: null; parentKey: null; epicMode: null; jira: boolean }
+
+function parentColumn(row: ListRow): string {
+  if (row.jiraProjectKey === null) return ''
+  if (row.parentKey) return row.parentKey
+  return row.epicMode === 'per-run' ? '(board)' : ''
 }
 
 export async function runMap(argv: readonly string[]): Promise<number> {
@@ -50,22 +55,38 @@ export async function runMap(argv: readonly string[]): Promise<number> {
 
   if (subcommand === 'list') {
     const config = await readConfig()
-    const rows = Object.entries(config.projectMapping).map(([id, mapping]) => ({
+    let projects: BitaProject[] = []
+    try {
+      projects = await (await requireBita()).projects()
+    } catch {
+      projects = []
+    }
+    const byId = new Map(projects.map((project) => [project.id, project]))
+    const mapped: ListRow[] = Object.entries(config.projectMapping).map(([id, mapping]) => ({
       projectId: Number(id),
       ...mapping,
       epicMode: epicMode(mapping),
-      jira: projectGoesToJira(config, Number(id)),
+      jira: projectGoesToJira(config, Number(id), byId.get(Number(id))?.jira ?? null),
     }))
+    const known = new Set(mapped.map((row) => row.projectId))
+    const unmappedIds = [...new Set([...projects.map((project) => project.id), ...Object.keys(config.projectJira ?? {}).map(Number)])].filter((id) => Number.isInteger(id) && !known.has(id))
+    const unmapped: ListRow[] = unmappedIds.map((id) => ({
+      projectId: id,
+      projectName: byId.get(id)?.name ?? '',
+      jiraProjectKey: null,
+      parentKey: null,
+      epicMode: null,
+      jira: projectGoesToJira(config, id, byId.get(id)?.jira ?? null),
+    }))
+    const rows = [...mapped, ...unmapped]
 
     if (readBoolean(args, 'json')) {
       writeJson(successEnvelope('map list', rows, { jira: config.jira ?? null, projectJira: config.projectJira ?? {} }))
       return 0
     }
 
-    const outside = Object.entries(config.projectJira ?? {}).filter(([, jira]) => !jira).map(([id]) => id)
     if (rows.length === 0) {
-      writeOut('No bita project is mapped to a Jira project yet.')
-      if (outside.length > 0) writeOut(`Outside Jira: ${outside.join(', ')}`)
+      writeOut('No projects in bita, and nothing mapped in tally yet.')
       return 0
     }
 
@@ -84,16 +105,15 @@ export async function runMap(argv: readonly string[]): Promise<number> {
         rows.map((row) => [
           String(row.projectId),
           row.projectName,
-          row.jiraProjectKey,
+          row.jiraProjectKey ?? '',
           parentColumn(row),
-          row.issueTypeName ?? '',
-          row.doneTransition?.name ?? '',
-          row.site ?? '',
+          'issueTypeName' in row ? (row.issueTypeName ?? '') : '',
+          'doneTransition' in row ? (row.doneTransition?.name ?? '') : '',
+          'site' in row ? (row.site ?? '') : '',
           row.jira ? 'yes' : 'no',
         ]),
       ),
     )
-    if (outside.length > 0) writeOut(`\nOutside Jira: ${outside.join(', ')}`)
     return 0
   }
 

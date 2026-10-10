@@ -202,6 +202,14 @@ test('map set, story, list and unset keep the Jira targets in the tally config',
   const list = await tally(['map', 'list', '--json'], env)
   assert.equal(list.json.data[0].epicMode, 'fixed')
   assert.equal(list.json.data[0].storiesByEpic['INN-12'].devops.key, 'INN-40')
+  assert.deepEqual(
+    list.json.data.map((row: { projectId: number; jiraProjectKey: string | null; jira: boolean }) => [row.projectId, row.jiraProjectKey, row.jira]),
+    [
+      [789, 'INN', true],
+      [900, null, false],
+    ],
+  )
+  assert.equal(list.json.data[1].projectName, 'Can Doo with Pet')
 
   const summary = await tally(['summary', '--pending', '--json'], env)
   assert.equal(summary.json.data.groups[0].jiraProjectKey, 'INN')
@@ -282,6 +290,7 @@ test('project jira turns a project on and off in the tally config, over what bit
   assert.ok(summary.json.data.groups.some((group: { summary: string }) => group.summary === 'sitio de Can Doo'))
   const list = await tally(['map', 'list', '--json'], env)
   assert.deepEqual(list.json.meta.projectJira, { '900': true })
+  assert.deepEqual(list.json.data.map((row: { projectId: number; jira: boolean }) => [row.projectId, row.jira]), [[789, true], [900, true]])
   const unknown = await tally(['project', 'jira', 'nope', 'off', '--json'], env)
   assert.equal(unknown.code, 3)
   const bad = await tally(['project', 'jira', '900', 'maybe', '--json'], env)
