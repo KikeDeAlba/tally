@@ -1,0 +1,4 @@
+interface:
+  display_name: "tally"
+  short_description: "Agrupa el tiempo de bita y lo sube a Jira"
+  default_prompt: "Usa tally para subir a Jira el tiempo pendiente."

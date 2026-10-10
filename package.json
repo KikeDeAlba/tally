@@ -1,0 +1,58 @@
+{
+  "name": "@kikedealba/tally",
+  "version": "0.1.0",
+  "description": "Groups bita time entries into Jira-ready work and keeps track of what was already logged.",
+  "license": "MIT",
+  "author": "Jesus Enrique De Alba Gaytan",
+  "homepage": "https://github.com/KikeDeAlba/tally#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/KikeDeAlba/tally.git"
+  },
+  "bugs": {
+    "url": "https://github.com/KikeDeAlba/tally/issues"
+  },
+  "keywords": [
+    "bita",
+    "jira",
+    "timesheet",
+    "worklog",
+    "cli",
+    "claude-code",
+    "gemini-cli",
+    "codex",
+    "opencode"
+  ],
+  "type": "module",
+  "packageManager": "pnpm@11.22.0",
+  "engines": {
+    "node": ">=24"
+  },
+  "bin": {
+    "tally": "dist/bin/tally.js"
+  },
+  "files": [
+    "dist",
+    "skill",
+    "commands",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "prepack": "pnpm build",
+    "typecheck": "tsc --noEmit",
+    "test": "node --import ./test/helpers/isolate.ts --test \"test/**/*.test.ts\"",
+    "tally": "node src/bin/tally.ts"
+  },
+  "dependencies": {
+    "@kikedealba/kit": "^0.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.7.2"
+  }
+}

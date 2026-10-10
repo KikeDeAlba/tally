@@ -1,3 +1,131 @@
 # tally
 
-Groups bita time entries into Jira-ready work and keeps track of what was already logged.
+Agrupa en tareas listas para Jira el tiempo que mide [bita](https://github.com/KikeDeAlba/bita-cli)
+y lleva la cuenta de qué entradas ya se registraron.
+
+- **bita** mide: cronómetros, entradas y proyectos.
+- **tally** agrupa: proyecto + título → una tarea, con un worklog por bloque, la
+  estimación redondeada al medio punto y el tope de 8 horas por tarea. Guarda a
+  qué tablero, épica e Historias va cada proyecto, y qué entradas ya están en
+  Jira.
+- **[atl](https://github.com/KikeDeAlba/atl)** escribe en Jira. Lo hace el agente
+  siguiendo la skill de tally; tally solo anota el resultado con `tally link`.
+- **[inkwell](https://github.com/KikeDeAlba/inkwell)**, si está instalado, aporta
+  la nota y las páginas de cada entrada.
+
+Ninguna herramienta depende de otra: se encuentran por el registro de
+[kit](https://github.com/KikeDeAlba/kit) y hablan por su CLI con `--json`.
+
+## Instalación
+
+```sh
+npm install -g @kikedealba/tally
+tally setup
+```
+
+`tally setup` se registra en kit e instala la skill `tally` y los comandos
+`/tally-pending` y `/tally-push` en los agentes que encuentre (Claude Code,
+OpenCode, Codex y Gemini CLI). `--agents claude,codex` elige cuáles, `--agents
+all` los fuerza todos y `--no-agents` solo registra.
+
+Hace falta Node 24 o superior, y bita instalado (`npm install -g @kikedealba/bita
+&& bita setup`).
+
+### Si venías de bita 0.x
+
+Hasta bita 0.18 el registro de lo subido y los mapeos vivían en bita. Para
+traerlos:
+
+```sh
+tally migrate --from-bita --dry-run
+tally migrate --from-bita
+```
+
+Copia las filas de `jira_links` de `bita.db`, y de `~/.config/bita/config.json`
+los mapeos de proyecto (con su caché de Historias por épica), los temas, el tipo
+de issue por defecto, los datos de Jira y la zona horaria. El sitio de Atlassian
+de cada proyecto pasa a su mapeo. Se puede correr las veces que haga falta: lo
+que tally ya tiene se respeta y solo se rellenan los huecos. **bita no se
+modifica.** `BITA_DB_PATH` y `BITA_CONFIG_PATH` apuntan a otros archivos.
+
+## Uso
+
+```sh
+tally summary --pending                      # lo que falta subir, agrupado
+tally summary week --json                    # la semana, en el envelope de kit
+tally summary --from 2026-10-01 --to 2026-10-09
+tally groups --pending --json                # alias de summary
+
+tally map list
+tally map set <projectId> <JIRAKEY> --parent <JIRAKEY-123>   # siempre a esa épica
+tally map set <projectId> <JIRAKEY> --no-epic                # al tablero: la épica se elige en cada corrida
+tally map set <projectId> <JIRAKEY> --site <sitio de atl>    # tablero en otro sitio
+tally map story <projectId> <tema> <ISSUE-KEY> [--epic <KEY-123> | --no-epic]
+tally map unset <projectId>
+
+tally link 12 13 --issue DD-1896             # marca como registradas
+tally link 12 --issue DD-1896 --worklog 10042
+tally link 12 13 --unlink                    # vuelven a pendientes
+
+tally config get
+tally config set-jira --account-id <id> --atl-site <sitio> --issue-type Tarea
+```
+
+Los ids de proyecto y de entrada son los de bita (`bita projects`, `bita
+entries`).
+
+### `summary`
+
+Pide las entradas a bita (`bita entries … --json`), marca como registradas las
+que tally tiene atadas a un issue, y las agrupa por proyecto y título. La forma
+de `data` es la misma que tenía `bita summary`:
+
+- `data.groups[]`: `summary`, `totalSeconds`/`totalHuman`,
+  `estimateSeconds`/`estimateHuman`, `worklogs[]` (`startedJira`, `timeSpent`,
+  `entryId`), `entryIds[]`, `days[]`, `partIndex`/`partCount`, `kind` y
+  `meeting(s)`, el destino en Jira (`jiraProjectKey`, `epicMode`,
+  `jiraEpicKey`, `jiraStories`, `jiraStoriesByEpic`, `jiraSite`, tipos de
+  issue), y `docs[]`/`pages[]`/`noteCoverage` cuando inkwell está instalado.
+- `meta`: `range`, `filter`, `excluded` (corriendo, sin título, sin duración),
+  `alreadyRegistered`, `overlaps`, `unmappedProjects`, `nonJira`,
+  `storyThemes`, `notes` y `warnings`.
+
+Opciones: un preset (`today`, `yesterday`, `week`, `last-week`, `month`,
+`last-month`) o `--from`/`--to`/`--last-days`; `--pending` o `--registered`;
+`--include-running`; `--case-insensitive`; `--max-task-hours N` (8 por
+defecto); `--estimate-step-minutes N` (30 por defecto); `--no-notes`;
+`--notes-mode inline|path|both`; `--notes-budget-kb N`. Sin rango, `--pending`
+mira los últimos 90 días.
+
+Una entrada unificada con `bita merge` da un worklog por cada bloque original,
+cada uno con su id en `entryIds`. Cada bloque se registra por su propio id, así
+que `tally link` recibe todos los `entryIds` del grupo.
+
+## Datos
+
+| Qué | Dónde | Variable |
+|---|---|---|
+| Registros (entrada ↔ issue, worklog, fecha) | `~/.local/share/tally/tally.db` (Windows: `%LOCALAPPDATA%\tally\tally.db`) | `TALLY_DB_PATH` |
+| Mapeos, temas y datos de Jira | `~/.config/tally/config.json` (Windows: `%APPDATA%\tally\config.json`) | `TALLY_CONFIG_PATH` |
+
+`XDG_DATA_HOME` y `XDG_CONFIG_HOME` se respetan.
+
+## Capacidades
+
+`tally capabilities --json` anuncia `timesheet.summary`, `timesheet.map` y
+`timesheet.link`. Cualquier herramienta puede encontrar tally con kit
+(`findTool('tally', { capability: 'timesheet.summary' })`) y llamarlo con
+`--json`; la pestaña Jira de Den usa `tally summary --pending --json`.
+
+## Desarrollo
+
+```sh
+pnpm install
+pnpm typecheck
+pnpm test
+node src/bin/tally.ts help
+```
+
+## Licencia
+
+MIT
