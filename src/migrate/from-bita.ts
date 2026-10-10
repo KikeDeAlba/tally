@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises'
 import { DatabaseSync } from 'node:sqlite'
 import { NotFoundError } from '../errors.ts'
 import { inTransaction } from '../db/open.ts'
-import { findRegistration, registerIfAbsent, writeSetting } from '../db/registrations.ts'
+import { findRegistration, recordMergeIfAbsent, registerIfAbsent, writeSetting } from '../db/registrations.ts'
 import { normalizeProjectMapping, readConfig, writeConfig, type JiraConfig, type ProjectMapping, type StoryRef, type TallyConfig } from '../state/config.ts'
 import type { StoryTheme } from '../constants.ts'
 
@@ -23,8 +23,10 @@ export interface MigrationReport {
   tallyConfig: string
   counts: {
     links: { found: number; copied: number; skipped: number }
+    merges: { found: number; copied: number }
     mappings: { found: number; copied: number; merged: number; skipped: number }
     stories: { found: number; copied: number }
+    outsideJira: { found: number; copied: number }
     themes: { found: number; copied: number }
     jiraSettings: { copied: string[] }
     defaults: { copied: string[] }
@@ -41,8 +43,10 @@ interface BitaLink {
 }
 
 interface BitaData {
+  merges: { absorbedId: number; survivorId: number }[]
   links: BitaLink[]
   sites: Map<string, string>
+  outsideJira: string[]
 }
 
 function hasTable(db: DatabaseSync, name: string): boolean {
@@ -53,21 +57,34 @@ function readBitaData(file: string): BitaData {
   const db = new DatabaseSync(file, { readOnly: true })
   try {
     const sites = new Map<string, string>()
+    const outsideJira: string[] = []
+    const merges: BitaData['merges'] = []
+    if (hasTable(db, 'entries')) {
+      const columns = new Set((db.prepare(`PRAGMA table_info("entries")`).all() as { name: string }[]).map((column) => column.name))
+      if (columns.has('merged_into')) {
+        const rows = db.prepare('SELECT id, merged_into FROM entries WHERE merged_into IS NOT NULL ORDER BY id').all() as { id: number; merged_into: number }[]
+        for (const row of rows) merges.push({ absorbedId: Number(row.id), survivorId: Number(row.merged_into) })
+      }
+    }
     if (hasTable(db, 'projects')) {
       const columns = new Set((db.prepare(`PRAGMA table_info("projects")`).all() as { name: string }[]).map((column) => column.name))
+      if (columns.has('jira')) {
+        const rows = db.prepare('SELECT id FROM projects WHERE jira = 0 ORDER BY id').all() as { id: number }[]
+        for (const row of rows) outsideJira.push(String(row.id))
+      }
       if (columns.has('atlassian_site')) {
         const rows = db.prepare('SELECT id, atlassian_site FROM projects WHERE atlassian_site IS NOT NULL').all() as { id: number; atlassian_site: string }[]
         for (const row of rows) sites.set(String(row.id), row.atlassian_site)
       }
     }
-    if (!hasTable(db, 'jira_links')) return { links: [], sites }
+    if (!hasTable(db, 'jira_links')) return { merges, links: [], sites, outsideJira }
     const rows = db.prepare('SELECT entry_id, issue_key, worklog_id, linked_at FROM jira_links ORDER BY entry_id').all() as {
       entry_id: number
       issue_key: string | null
       worklog_id: string | null
       linked_at: string
     }[]
-    return { links: rows.map((row) => ({ entryId: Number(row.entry_id), issueKey: row.issue_key, worklogId: row.worklog_id, linkedAt: row.linked_at })), sites }
+    return { links: rows.map((row) => ({ entryId: Number(row.entry_id), issueKey: row.issue_key, worklogId: row.worklog_id, linkedAt: row.linked_at })), sites, outsideJira, merges }
   } finally {
     db.close()
   }
@@ -138,8 +155,10 @@ export async function migrateFromBita(db: DatabaseSync, sources: MigrationSource
     tallyConfig: sources.tallyConfig,
     counts: {
       links: { found: 0, copied: 0, skipped: 0 },
+      merges: { found: 0, copied: 0 },
       mappings: { found: 0, copied: 0, merged: 0, skipped: 0 },
       stories: { found: 0, copied: 0 },
+      outsideJira: { found: 0, copied: 0 },
       themes: { found: 0, copied: 0 },
       jiraSettings: { copied: [] },
       defaults: { copied: [] },
@@ -151,12 +170,12 @@ export async function migrateFromBita(db: DatabaseSync, sources: MigrationSource
   if (!hasDatabase) warnings.push(`No bita database at ${sources.bitaDatabase}; no registrations were copied.`)
   if (!hasConfig) warnings.push(`No bita config at ${sources.bitaConfig}; no mappings were copied.`)
 
-  const bitaData: BitaData = hasDatabase ? readBitaData(sources.bitaDatabase) : { links: [], sites: new Map() }
+  const bitaData: BitaData = hasDatabase ? readBitaData(sources.bitaDatabase) : { merges: [], links: [], sites: new Map(), outsideJira: [] }
   const links = bitaData.links
   report.counts.links.found = links.length
   if (options.dryRun) {
     for (const link of links) {
-      if (findRegistration(db, link.entryId)) report.counts.links.skipped += 1
+      if (findRegistration(db, link.entryId, { includeOrphaned: true })) report.counts.links.skipped += 1
       else report.counts.links.copied += 1
     }
   } else {
@@ -168,11 +187,33 @@ export async function migrateFromBita(db: DatabaseSync, sources: MigrationSource
     })
   }
 
+  report.counts.merges.found = bitaData.merges.length
+  const mergedAt = (options.now ?? new Date()).toISOString()
+  if (options.dryRun) {
+    const known = new Set((db.prepare('SELECT absorbed_id FROM merges').all() as { absorbed_id: number }[]).map((row) => Number(row.absorbed_id)))
+    report.counts.merges.copied = bitaData.merges.filter((merge) => !known.has(merge.absorbedId)).length
+  } else {
+    inTransaction(db, () => {
+      for (const merge of bitaData.merges) {
+        if (recordMergeIfAbsent(db, merge.absorbedId, merge.survivorId, mergedAt)) report.counts.merges.copied += 1
+      }
+    })
+  }
+
   const raw = hasConfig ? await readBitaConfig(sources.bitaConfig) : null
   if (hasConfig && raw === null) warnings.push(`${sources.bitaConfig} could not be read as JSON; no mappings were copied.`)
+  const config: TallyConfig = await readConfig(sources.tallyConfig)
+  let changed = false
+
+  report.counts.outsideJira.found = bitaData.outsideJira.length
+  for (const id of bitaData.outsideJira) {
+    if (typeof config.projectJira?.[id] === 'boolean') continue
+    config.projectJira = { ...config.projectJira, [id]: false }
+    report.counts.outsideJira.copied += 1
+    changed = true
+  }
+
   if (raw) {
-    const config: TallyConfig = await readConfig(sources.tallyConfig)
-    let changed = false
 
     const mappings = normalizeProjectMapping(raw['projectMapping'])
     report.counts.mappings.found = Object.keys(mappings).length
@@ -231,9 +272,8 @@ export async function migrateFromBita(db: DatabaseSync, sources: MigrationSource
       report.counts.defaults.copied.push('timezone')
       changed = true
     }
-
-    if (changed && !options.dryRun) await writeConfig(config, sources.tallyConfig)
   }
+  if (changed && !options.dryRun) await writeConfig(config, sources.tallyConfig)
 
   if (!options.dryRun) {
     const at = (options.now ?? new Date()).toISOString()

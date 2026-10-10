@@ -12,11 +12,11 @@ import { partitionByJira, summarizeNonJira } from '../../domain/no-jira.ts'
 import { emptyDocs, loadSummaryDocs, parseNotesMode, type LoadedDocs } from '../../domain/notes.ts'
 import type { RegistrationFilter } from '../../domain/filter.ts'
 import type { TaskGroup } from '../../domain/types.ts'
-import { requireBita, type BitaEntries } from '../../integrations/bita.ts'
+import { requireBita, type BitaEntries, type BitaEntry } from '../../integrations/bita.ts'
 import { findNotesProvider } from '../../integrations/inkwell.ts'
 import { openDatabase } from '../../db/open.ts'
 import { countRegistrations, registrationsFor } from '../../db/registrations.ts'
-import { jiraTarget, readConfig, storyThemes, type TallyConfig } from '../../state/config.ts'
+import { jiraTarget, projectGoesToJira, readConfig, storyThemes, type TallyConfig } from '../../state/config.ts'
 
 const SUMMARY_OPTIONS = {
   'case-insensitive': { type: 'boolean' as const, default: false },
@@ -45,9 +45,36 @@ export interface SummaryInput {
   rangeWarnings?: string[]
 }
 
+export interface MergeConflict {
+  entryId: number
+  description: string
+  issues: string[]
+  registeredEntryIds: number[]
+  pendingEntryIds: number[]
+}
+
+export function mergeConflicts(entries: readonly BitaEntry[], registrations: SummaryInput['registrations']): MergeConflict[] {
+  const conflicts: MergeConflict[] = []
+  for (const entry of entries) {
+    if (entry.segments.length === 0) continue
+    const blocks = entry.segments.map((segment) => segment.entryId)
+    const registered = blocks.filter((id) => registrations.has(id))
+    if (registered.length === 0) continue
+    const issues = [...new Set(registered.map((id) => registrations.get(id)?.issueKey ?? '').filter((key) => key.length > 0))]
+    const pending = blocks.filter((id) => !registrations.has(id))
+    if (issues.length > 1 || pending.length > 0) {
+      conflicts.push({ entryId: entry.id, description: entry.description, issues, registeredEntryIds: registered, pendingEntryIds: pending })
+    }
+  }
+  return conflicts
+}
+
 export async function buildSummary(input: SummaryInput, options: SummaryOptions) {
   const timezone = input.bita.range.timezone
-  const expanded = applyRegistrations(expandSegments(input.bita.entries, timezone), input.registrations)
+  const config = input.config
+  const entries = input.bita.entries.map((entry) => ({ ...entry, jira: projectGoesToJira(config, entry.projectId, entry.jira) }))
+  const expanded = applyRegistrations(expandSegments(entries, timezone), input.registrations)
+  const conflicts = mergeConflicts(entries, input.registrations)
   const result = collectEntries(expanded, {
     filter: options.filter,
     includeRunning: options.includeRunning,
@@ -56,6 +83,9 @@ export async function buildSummary(input: SummaryInput, options: SummaryOptions)
     now: options.now,
   })
   const warnings = [...(input.rangeWarnings ?? []), ...result.warnings]
+  for (const conflict of conflicts) {
+    warnings.push(`Merged entry #${conflict.entryId} "${conflict.description}" has blocks registered in ${conflict.issues.join(', ') || 'Jira'}${conflict.pendingEntryIds.length > 0 ? ` and ${conflict.pendingEntryIds.length} pending` : ''}; check them before uploading.`)
+  }
 
   if (!input.hasRegistrations && input.bita.entries.some((entry) => entry.bitaRegistered)) {
     warnings.push('tally has no registrations yet while bita still reports registered entries. Run "tally migrate --from-bita".')
@@ -72,7 +102,6 @@ export async function buildSummary(input: SummaryInput, options: SummaryOptions)
   const loaded = input.docs ? await input.docs(allEntryIds) : emptyDocs()
   const hasNote = (id: number) => loaded.byEntry.has(id) || loaded.pagesByEntry.has(id)
   const missingNotes = loaded.provider === null ? [] : allEntryIds.filter((id) => !hasNote(id))
-  const config = input.config
 
   const withMapping = groups.map((group) => {
     const mapping = group.projectId === null ? undefined : config.projectMapping[String(group.projectId)]
@@ -129,6 +158,7 @@ export async function buildSummary(input: SummaryInput, options: SummaryOptions)
       overlaps: result.overlaps,
       unmappedProjects,
       nonJira,
+      conflicts,
       notes: {
         provider: loaded.provider,
         matched: loaded.byEntry.size,

@@ -9,6 +9,8 @@ import { runLink } from './commands/link.ts'
 import { runConfig } from './commands/config.ts'
 import { runMigrate } from './commands/migrate.ts'
 import { runSetup, runUninstall } from './commands/setup.ts'
+import { runProject } from './commands/project.ts'
+import { runBitaHook } from './commands/hook.ts'
 
 export const HELP = `tally ${VERSION} — bita time grouped into Jira-ready work, and what was already logged
 
@@ -24,12 +26,14 @@ Usage:
   tally map story <projectId> <themeId> <ISSUE-KEY> [--epic KEY-123 | --no-epic] [--summary TEXT]
   tally link <entryIds...> --issue KEY [--worklog ID] [--force]
   tally link <entryIds...> --unlink
+  tally project jira <id|key|name> [on|off]   Whether a bita project's time goes to Jira
   tally config get [--json]
   tally config set-jira [--site URL] [--atl-site NAME] [--account-id ID] [--cloud-id ID] [--issue-type NAME]
   tally migrate --from-bita [--dry-run]
   tally capabilities [--json]
   tally setup [--agents detected|all|claude,opencode,codex,gemini] [--no-agents]
   tally uninstall
+  tally bita-hook < event.json     Handles bita delete and merge events (called by bita through kit)
   tally help | --version
 
 Presets: today, yesterday, week, last-week, month, last-month.
@@ -40,7 +44,7 @@ Jira is written by the agent through atl; tally records it with "tally link".
 function commandName(argv: readonly string[]): string {
   const words = argv.filter((arg) => !arg.startsWith('-'))
   const head = words[0] ?? 'help'
-  if (['map', 'config'].includes(head) && words[1]) return `${head} ${words[1]}`
+  if (['map', 'config', 'project'].includes(head) && words[1]) return `${head} ${words[1]}`
   return head
 }
 
@@ -74,6 +78,10 @@ async function dispatch(argv: readonly string[]): Promise<number> {
       return runLink(rest)
     case 'config':
       return runConfig(rest)
+    case 'project':
+      return runProject(rest)
+    case 'bita-hook':
+      return runBitaHook(rest)
     case 'migrate':
       return runMigrate(rest)
     case 'setup':

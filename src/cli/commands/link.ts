@@ -6,6 +6,7 @@ import { findRegistration, register, unregister } from '../../db/registrations.t
 import { requireBita, type BitaClient } from '../../integrations/bita.ts'
 import { mapLimited } from '../../domain/concurrency.ts'
 import { NOTES_CONCURRENCY } from '../../constants.ts'
+import { projectGoesToJira, readConfig } from '../../state/config.ts'
 
 const ISSUE_KEY_PATTERN = /^[A-Z][A-Z0-9_]+-\d+$/
 
@@ -45,17 +46,18 @@ async function verifyEntries(bita: BitaClient, ids: readonly number[], force: bo
   const missing = details.filter((item) => item.detail === null).map((item) => item.id)
   if (missing.length > 0) throw new UsageError(`No entry with id ${missing.join(', ')} in bita.`)
   if (force) return
+  const config = await readConfig()
   const projects = new Map((await bita.projects()).map((project) => [project.id, project]))
   const outside = details.filter((item) => {
     const projectId = item.detail?.projectId ?? null
-    return projectId !== null && projects.get(projectId)?.jira === false
+    return projectId !== null && !projectGoesToJira(config, projectId, projects.get(projectId)?.jira ?? null)
   })
   if (outside.length > 0) {
     const projectName = outside[0]?.detail?.projectName ?? 'a project'
     throw new ConflictError(
       `Entries ${outside.map((item) => `#${item.id}`).join(', ')} belong to ${projectName}, which never goes to Jira.`,
       'NOT_A_JIRA_PROJECT',
-      'tally link ... --force',
+      'tally project jira <project> on, or tally link ... --force',
     )
   }
 }

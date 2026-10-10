@@ -19,7 +19,7 @@ function options(overrides: Partial<SummaryOptions> = {}): SummaryOptions {
 }
 
 function registration(entryId: number, issueKey: string): Registration {
-  return { entryId, issueKey, worklogId: null, linkedAt: '2026-09-19T00:00:00Z', source: 'tally' }
+  return { entryId, issueKey, worklogId: null, linkedAt: '2026-09-19T00:00:00Z', source: 'tally', orphanedAt: null }
 }
 
 async function summarize(entries: BitaEntry[], extra: { registrations?: Registration[]; config?: TallyConfig; options?: Partial<SummaryOptions>; notes?: NotesProvider } = {}) {

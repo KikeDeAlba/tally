@@ -4,6 +4,7 @@ import { agents } from '@kikedealba/kit'
 import type { PlatformContext } from '@kikedealba/kit/platform'
 import { defineManifest, registerTool, stableBin, unregisterTool, type ToolManifest } from '@kikedealba/kit/registry'
 import { PACKAGE_ROOT, VERSION } from './version.ts'
+import { SUBSCRIBED_EVENTS } from './cli/commands/hook.ts'
 
 export const CAPABILITIES = ['timesheet.summary', 'timesheet.map', 'timesheet.link']
 
@@ -31,6 +32,7 @@ export function manifest(bin: readonly string[] = binCommand()): ToolManifest {
     description: 'Groups bita time entries into Jira-ready work and tracks what was logged',
     bin: [...bin],
     capabilities: CAPABILITIES,
+    subscribes: [{ tool: 'bita', events: [...SUBSCRIBED_EVENTS], command: [...bin, 'bita-hook'] }],
     homepage: 'https://github.com/KikeDeAlba/tally',
     install: INSTALL_HINT,
   })
@@ -51,6 +53,7 @@ export function integration(): agents.AgentIntegration {
           'Bash(tally map list:*)',
           'Bash(tally map set:*)',
           'Bash(tally map story:*)',
+          'Bash(tally project jira:*)',
           'Bash(tally link:*)',
           'Bash(tally config get:*)',
           'Bash(tally capabilities:*)',

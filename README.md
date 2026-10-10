@@ -44,7 +44,8 @@ tally migrate --from-bita
 Copia las filas de `jira_links` de `bita.db`, y de `~/.config/bita/config.json`
 los mapeos de proyecto (con su caché de Historias por épica), los temas, el tipo
 de issue por defecto, los datos de Jira y la zona horaria. El sitio de Atlassian
-de cada proyecto pasa a su mapeo. Se puede correr las veces que haga falta: lo
+de cada proyecto pasa a su mapeo, y los proyectos que bita tenía fuera de Jira
+quedan así en tally (`tally project jira`). Se puede correr las veces que haga falta: lo
 que tally ya tiene se respeta y solo se rellenan los huecos. **bita no se
 modifica.** `BITA_DB_PATH` y `BITA_CONFIG_PATH` apuntan a otros archivos.
 
@@ -66,6 +67,9 @@ tally map unset <projectId>
 tally link 12 13 --issue DD-1896             # marca como registradas
 tally link 12 --issue DD-1896 --worklog 10042
 tally link 12 13 --unlink                    # vuelven a pendientes
+
+tally project jira "Can Doo" off             # su tiempo nunca va a Jira
+tally project jira CDP                       # consulta
 
 tally config get
 tally config set-jira --account-id <id> --atl-site <sitio> --issue-type Tarea
@@ -101,12 +105,25 @@ Una entrada unificada con `bita merge` da un worklog por cada bloque original,
 cada uno con su id en `entryIds`. Cada bloque se registra por su propio id, así
 que `tally link` recibe todos los `entryIds` del grupo.
 
+## Eventos de bita
+
+`tally setup` suscribe tally a los eventos `delete` y `merge` de bita (por el
+registro de kit, comando `tally bita-hook`):
+
+- **delete**: el registro de la entrada borrada (y de sus bloques) se conserva
+  como huérfano, para no perder la historia, y deja de contar: un id que bita
+  reutilice nace pendiente.
+- **merge**: cada bloque conserva su propio registro, así que lo ya subido no
+  vuelve a salir en `--pending` y lo que no se había subido sí. Se anota qué
+  entrada absorbió a cuál, y si los bloques quedan en issues distintos o en
+  parte registrados, `summary` lo reporta en `meta.conflicts` y en un aviso.
+
 ## Datos
 
 | Qué | Dónde | Variable |
 |---|---|---|
 | Registros (entrada ↔ issue, worklog, fecha) | `~/.local/share/tally/tally.db` (Windows: `%LOCALAPPDATA%\tally\tally.db`) | `TALLY_DB_PATH` |
-| Mapeos, temas y datos de Jira | `~/.config/tally/config.json` (Windows: `%APPDATA%\tally\config.json`) | `TALLY_CONFIG_PATH` |
+| Mapeos, proyectos fuera de Jira, temas y datos de Jira | `~/.config/tally/config.json` (Windows: `%APPDATA%\tally\config.json`) | `TALLY_CONFIG_PATH` |
 
 `XDG_DATA_HOME` y `XDG_CONFIG_HOME` se respetan.
 

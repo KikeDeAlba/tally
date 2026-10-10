@@ -51,7 +51,22 @@ export interface TallyConfig {
   jira?: JiraConfig
   defaults?: ConfigDefaults
   projectMapping: Record<string, ProjectMapping>
+  projectJira?: Record<string, boolean>
   [key: string]: unknown
+}
+
+export function projectGoesToJira(config: TallyConfig, projectId: number | null, fallback: boolean | null = null): boolean {
+  if (projectId === null) return fallback ?? true
+  const own = config.projectJira?.[String(projectId)]
+  if (typeof own === 'boolean') return own
+  return fallback ?? true
+}
+
+export async function setProjectJira(projectId: number, jira: boolean, file: string = defaultConfigPath()): Promise<TallyConfig> {
+  const config = await readConfig(file)
+  config.projectJira = { ...config.projectJira, [String(projectId)]: jira }
+  await writeConfig(config, file)
+  return config
 }
 
 export function emptyConfig(): TallyConfig {

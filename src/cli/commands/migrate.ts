@@ -26,6 +26,7 @@ export async function runMigrate(argv: readonly string[]): Promise<number> {
     writeOut(`Registrations: ${counts.links.found} found, ${verb} ${counts.links.copied}, ${counts.links.skipped} already here`)
     writeOut(`Mappings     : ${counts.mappings.found} found, ${verb} ${counts.mappings.copied}, merged ${counts.mappings.merged}, ${counts.mappings.skipped} unchanged`)
     writeOut(`Stories      : ${counts.stories.found} found, ${verb} ${counts.stories.copied}`)
+    writeOut(`Outside Jira : ${counts.outsideJira.found} found, ${verb} ${counts.outsideJira.copied}`)
     writeOut(`Themes       : ${counts.themes.found} found, ${verb} ${counts.themes.copied}`)
     if (counts.jiraSettings.copied.length > 0) writeOut(`Jira settings: ${counts.jiraSettings.copied.join(', ')}`)
     if (counts.defaults.copied.length > 0) writeOut(`Defaults     : ${counts.defaults.copied.join(', ')}`)

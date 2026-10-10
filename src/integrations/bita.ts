@@ -41,7 +41,7 @@ export interface BitaProject {
   name: string
   key: string | null
   active: boolean
-  jira: boolean
+  jira: boolean | null
 }
 
 export interface BitaClient {
@@ -170,7 +170,7 @@ export class CliBita implements BitaClient {
       const data = record(raw)
       const id = integer(data['id'])
       if (id === null) return []
-      return [{ id, name: text(data['name']) ?? '', key: text(data['key']), active: data['active'] !== false, jira: data['jira'] !== false }]
+      return [{ id, name: text(data['name']) ?? '', key: text(data['key']), active: data['active'] !== false, jira: typeof data['jira'] === 'boolean' ? data['jira'] : null }]
     })
   }
 }

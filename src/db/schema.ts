@@ -24,6 +24,18 @@ export const MIGRATIONS: readonly Migration[] = [
        )`,
     ],
   },
+  {
+    version: 2,
+    statements: [
+      `ALTER TABLE registrations ADD COLUMN orphaned_at TEXT`,
+      `CREATE TABLE merges (
+         absorbed_id INTEGER PRIMARY KEY,
+         survivor_id INTEGER NOT NULL,
+         merged_at TEXT NOT NULL
+       )`,
+      `CREATE INDEX merges_survivor ON merges (survivor_id)`,
+    ],
+  },
 ]
 
 export const LATEST_VERSION = MIGRATIONS.reduce((max, migration) => Math.max(max, migration.version), 0)

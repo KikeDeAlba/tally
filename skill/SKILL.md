@@ -361,15 +361,18 @@ Devuelve un envelope con `data.groups`. Cada grupo es **una tarea de Jira**:
 - `partIndex` / `partCount` / `splitReason` — ver el tope de 8 horas.
 
 En `meta` vienen `excluded`, `alreadyRegistered`, `unmappedProjects`,
-`nonJira`, `overlaps`, `storyThemes`, `notes` y `warnings`.
+`nonJira`, `overlaps`, `conflicts`, `storyThemes`, `notes` y `warnings`.
 
-**Proyectos fuera de Jira.** Un proyecto con `jira: false` en `bita projects
---json` (por ejemplo, Can Doo with Pet) se mide y se documenta, pero **nunca va
-a Jira**. Con `--pending`, sus entradas no aparecen en `groups` ni en
+**Proyectos fuera de Jira.** Un proyecto marcado con `tally project jira
+<proyecto> off` (por ejemplo, Can Doo with Pet) se mide y se documenta, pero
+**nunca va a Jira**. Se revierte con `on`, y `tally map list` enseña cuáles están
+fuera. Con `--pending`, sus entradas no aparecen en `groups` ni en
 `unmappedProjects`: quedan sumadas en `meta.nonJira` (`totalHuman` y
 `projects[]`). No propongas mapearlo, no lo pongas en la propuesta, y repórtalo
 aparte en una línea («Fuera de Jira: 3h 30m de Can Doo with Pet»). `tally link`
-rechaza esas entradas con `NOT_A_JIRA_PROJECT`.
+rechaza esas entradas con `NOT_A_JIRA_PROJECT`. Si el usuario dice que un
+proyecto no va a Jira, márcalo así en vez de dejar sus entradas pendientes para
+siempre.
 
 ### 3. Triaje
 
@@ -381,6 +384,15 @@ Reporta los cubos aunque no se procesen. Ninguno se escribe en Jira:
 | `no-description` | No inventes título. Lista y pide uno, o déjalas pendientes. |
 | `zero-duration` | Excluir: Jira rechaza worklogs de menos de un minuto. |
 | `alreadyRegistered` | Solo se cuenta para el reporte. |
+
+**`meta.conflicts`** son entradas unificadas con `bita merge` cuyos bloques ya
+estaban registrados en issues distintos, o en parte registrados y en parte no.
+Cada bloque se registra por su id, así que lo ya subido no vuelve a salir y lo
+pendiente sí: no se duplica ni se pierde nada, pero el trabajo queda repartido
+entre varios issues. **Dilo en la propuesta** con los issues y los bloques
+(`issues`, `registeredEntryIds`, `pendingEntryIds`) y deja que el usuario decida
+si el bloque pendiente va al mismo issue que los registrados (paso 8 sobre ese
+issue, sin crear otro) o a uno nuevo.
 
 **`meta.overlaps`** no excluye nada: son los días donde el tiempo registrado
 supera el tiempo de reloj cubierto, porque hubo cronómetros solapados. Está

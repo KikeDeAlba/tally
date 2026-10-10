@@ -12,7 +12,8 @@ if (head === 'capabilities') {
   reply('capabilities', { name: 'inkwell', version: '0.2.0', envelope: 1, capabilities: ['docs.page.read', 'docs.entry-notes'], emits: [] })
 } else if (head === 'note' && sub === 'show') {
   const markdown = notes[id ?? '']
-  reply('note show', markdown === undefined ? null : { entryId: Number(id), relPath: `notes/${id}.md`, path: `/docs/notes/${id}.md`, title: `Note ${id}`, markdown })
+  const doc = markdown === undefined ? null : { kind: 'note', relPath: `notes/${id}.md`, path: `/docs/notes/${id}.md`, docTitle: `Note ${id}`, sectionCount: 2, byteSize: markdown.length, markdown }
+  reply('note show', { id: Number(id), description: 'ajustar pipeline', doc, appendices: [] })
 } else if (head === 'page' && sub === 'ls') {
   const entry = args[args.indexOf('--entry') + 1]
   reply('page ls', { pages: entry === '1' ? [{ pageId: 5, title: 'Pipeline', relPath: 'plataforma/pipeline.md', issues: [{ key: 'INN-9', status: 'Cerrada' }] }] : [] })

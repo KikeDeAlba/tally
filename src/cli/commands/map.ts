@@ -3,6 +3,7 @@ import { parseCommandArgs, readBoolean, readString } from '../args.ts'
 import { requireBita } from '../../integrations/bita.ts'
 import {
   epicMode,
+  projectGoesToJira,
   NO_EPIC,
   readConfig,
   setProjectMapping,
@@ -53,15 +54,18 @@ export async function runMap(argv: readonly string[]): Promise<number> {
       projectId: Number(id),
       ...mapping,
       epicMode: epicMode(mapping),
+      jira: projectGoesToJira(config, Number(id)),
     }))
 
     if (readBoolean(args, 'json')) {
-      writeJson(successEnvelope('map list', rows, { jira: config.jira ?? null }))
+      writeJson(successEnvelope('map list', rows, { jira: config.jira ?? null, projectJira: config.projectJira ?? {} }))
       return 0
     }
 
+    const outside = Object.entries(config.projectJira ?? {}).filter(([, jira]) => !jira).map(([id]) => id)
     if (rows.length === 0) {
       writeOut('No bita project is mapped to a Jira project yet.')
+      if (outside.length > 0) writeOut(`Outside Jira: ${outside.join(', ')}`)
       return 0
     }
 
@@ -75,6 +79,7 @@ export async function runMap(argv: readonly string[]): Promise<number> {
           { header: 'ISSUE TYPE' },
           { header: 'DONE TRANSITION' },
           { header: 'SITE' },
+          { header: 'ON' },
         ],
         rows.map((row) => [
           String(row.projectId),
@@ -84,9 +89,11 @@ export async function runMap(argv: readonly string[]): Promise<number> {
           row.issueTypeName ?? '',
           row.doneTransition?.name ?? '',
           row.site ?? '',
+          row.jira ? 'yes' : 'no',
         ]),
       ),
     )
+    if (outside.length > 0) writeOut(`\nOutside Jira: ${outside.join(', ')}`)
     return 0
   }
 
@@ -112,9 +119,9 @@ export async function runMap(argv: readonly string[]): Promise<number> {
         `No project with id ${projectId}. Run "bita projects" to list them.`,
       )
     }
-    if (!project.jira) {
+    if (!projectGoesToJira(await readConfig(), projectId, project.jira)) {
       throw new UsageError(
-        `"${project.name}" is marked in bita as a project outside Jira, so its time never goes there.`,
+        `"${project.name}" never goes to Jira. Turn it on first with: tally project jira ${projectId} on`,
       )
     }
 

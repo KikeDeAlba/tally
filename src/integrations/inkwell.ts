@@ -36,19 +36,17 @@ function text(value: unknown): string | null {
 }
 
 export function toEntryNote(entryId: number, raw: unknown): EntryNote | null {
-  if (raw === null || raw === undefined) return null
-  const data = record(Array.isArray(raw) ? raw[0] : raw)
-  if (Object.keys(data).length === 0) return null
-  const markdown = text(data['markdown']) ?? text(data['content']) ?? text(data['body'])
-  const notePath = text(data['path']) ?? text(data['absPath'])
-  const relPath = text(data['relPath'])
-  if (markdown === null && notePath === null && relPath === null) return null
+  const data = record(raw)
+  if (data['doc'] === null || data['doc'] === undefined) return null
+  const doc = record(data['doc'])
+  const relPath = text(doc['relPath'])
+  if (relPath === null) return null
   return {
     entryId,
     relPath,
-    path: notePath,
-    title: text(data['title']) ?? '',
-    markdown,
+    path: text(doc['path']),
+    title: text(doc['docTitle']) ?? text(data['title']) ?? text(data['description']) ?? '',
+    markdown: text(doc['markdown']),
   }
 }
 

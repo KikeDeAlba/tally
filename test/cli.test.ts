@@ -69,7 +69,7 @@ async function sandbox(t: { after: (fn: () => Promise<void>) => void }) {
   return { dir, env }
 }
 
-async function withFakeBita(env: NodeJS.ProcessEnv, options: { inkwell?: boolean } = {}) {
+async function withFakeBita(env: NodeJS.ProcessEnv, options: { inkwell?: boolean; legacy?: boolean } = {}) {
   const ctx = platformContext({ env })
   await registerTool(defineManifest({ name: 'bita', version: '0.18.1', bin: [process.execPath, FAKE_BITA], capabilities: ['time.entries.read', 'time.entries.write', 'time.events'] }), ctx)
   if (options.inkwell) {
@@ -79,16 +79,25 @@ async function withFakeBita(env: NodeJS.ProcessEnv, options: { inkwell?: boolean
     bitaEntry({ id: 1, start: '2026-10-06T16:00:00Z', durationSeconds: 3600, segments: [{ id: 4, start: '2026-10-06T20:00:00Z', durationSeconds: 1800 }] }),
     bitaEntry({ id: 2, start: '2026-10-07T16:00:00Z', durationSeconds: 2700 }),
     bitaEntry({ id: 3, description: 'sitio de Can Doo', projectId: 900, projectName: 'Can Doo with Pet', jira: false, start: '2026-10-07T18:00:00Z', durationSeconds: 1800 }),
-  ]
+  ].map((entry) => {
+    if (options.legacy) return entry
+    const { jira: _jira, registered: _registered, issueKey: _issueKey, bitaRegistered: _bitaRegistered, ...current } = entry
+    return current
+  })
   await writeFile(
     env['FAKE_BITA_STATE'] as string,
     JSON.stringify({
       entries,
       range: { fromDay: '2026-10-01', toDay: '2026-10-10', timezone: TEST_TZ },
-      projects: [
-        { id: 789, name: 'Plataforma', jira: true, active: true },
-        { id: 900, name: 'Can Doo with Pet', jira: false, active: true },
-      ],
+      projects: options.legacy
+        ? [
+            { id: 789, key: 'PLA', name: 'Plataforma', jira: true, active: true },
+            { id: 900, key: 'CDP', name: 'Can Doo with Pet', jira: false, active: true },
+          ]
+        : [
+            { id: 789, key: 'PLA', name: 'Plataforma', clientName: null, active: true },
+            { id: 900, key: 'CDP', name: 'Can Doo with Pet', clientName: null, active: true },
+          ],
     }),
   )
   await writeFile(env['FAKE_INKWELL_NOTES'] as string, JSON.stringify({ '1': '## Contexto\nPipeline de despliegue\n\n## Qué se hizo\n- se ajustó\n' }))
@@ -108,6 +117,8 @@ test('summary without bita says how to install it', async (t) => {
 test('summary groups the pending entries from bita, with the notes from inkwell', async (t) => {
   const { env } = await sandbox(t)
   await withFakeBita(env, { inkwell: true })
+  const off = await tally(['project', 'jira', 'can doo with pet', 'off', '--json'], env)
+  assert.deepEqual(off.json.data, { id: 900, name: 'Can Doo with Pet', jira: false })
   const result = await tally(['summary', '--pending', '--json'], env)
   assert.equal(result.code, 0, result.stdout + result.stderr)
   const { data, meta } = result.json
@@ -135,7 +146,7 @@ test('summary groups the pending entries from bita, with the notes from inkwell'
 
 test('link marks entries registered, refuses projects outside Jira, and unlink brings them back', async (t) => {
   const { env } = await sandbox(t)
-  await withFakeBita(env)
+  await withFakeBita(env, { legacy: true })
 
   const linked = await tally(['link', '1', '4', '--issue', 'PP-5', '--worklog', '77', '--json'], env)
   assert.equal(linked.code, 0, linked.stdout + linked.stderr)
@@ -174,6 +185,7 @@ test('link marks entries registered, refuses projects outside Jira, and unlink b
 test('map set, story, list and unset keep the Jira targets in the tally config', async (t) => {
   const { env } = await sandbox(t)
   await withFakeBita(env)
+  assert.equal((await tally(['project', 'jira', 'CDP', 'off', '--json'], env)).code, 0)
 
   const set = await tally(['map', 'set', '789', 'inn', '--parent', 'INN-12', '--json'], env)
   assert.equal(set.code, 0, set.stdout + set.stderr)
@@ -233,7 +245,7 @@ test('migrate --from-bita reads the bita files named by the environment', async 
 
   const real = await tally(['migrate', '--from-bita', '--json'], env)
   assert.equal(real.json.data.counts.mappings.copied, 1)
-  await withFakeBita(env)
+  await withFakeBita(env, { legacy: true })
   const pending = await tally(['summary', '--pending', '--no-notes', '--json'], env)
   assert.deepEqual(pending.json.data.groups.flatMap((group: { entryIds: number[] }) => group.entryIds), [1, 4])
   assert.equal(pending.json.data.groups[0].jiraProjectKey, 'INN')
@@ -248,6 +260,7 @@ test('setup registers tally and installs the skill and commands in the agents', 
   assert.equal(result.code, 0, result.stdout + result.stderr)
   const registered = await readManifest('tally', platformContext({ env, home: dir }))
   assert.deepEqual(registered?.capabilities, ['timesheet.summary', 'timesheet.map', 'timesheet.link'])
+  assert.deepEqual(registered?.subscribes.map((item) => [item.tool, item.events, item.command.at(-1)]), [['bita', ['delete', 'merge'], 'bita-hook']])
   assert.ok(existsSync(path.join(dir, '.gemini', 'extensions', 'tally', 'skills', 'tally', 'SKILL.md')))
   assert.ok(existsSync(path.join(dir, '.gemini', 'extensions', 'tally', 'commands', 'tally-push.toml')))
 
@@ -255,4 +268,54 @@ test('setup registers tally and installs the skill and commands in the agents', 
   assert.equal(removed.code, 0)
   assert.equal(await readManifest('tally', platformContext({ env, home: dir })), null)
   assert.ok(!existsSync(path.join(dir, '.gemini', 'extensions', 'tally')))
+})
+
+test('project jira turns a project on and off in the tally config, over what bita says', async (t) => {
+  const { env } = await sandbox(t)
+  await withFakeBita(env, { legacy: true })
+  const before = await tally(['project', 'jira', '900', '--json'], env)
+  assert.equal(before.json.data.jira, false)
+  const on = await tally(['project', 'jira', 'CDP', 'on', '--json'], env)
+  assert.equal(on.json.data.jira, true)
+  const summary = await tally(['summary', '--pending', '--no-notes', '--json'], env)
+  assert.equal(summary.json.meta.nonJira.totalSeconds, 0)
+  assert.ok(summary.json.data.groups.some((group: { summary: string }) => group.summary === 'sitio de Can Doo'))
+  const list = await tally(['map', 'list', '--json'], env)
+  assert.deepEqual(list.json.meta.projectJira, { '900': true })
+  const unknown = await tally(['project', 'jira', 'nope', 'off', '--json'], env)
+  assert.equal(unknown.code, 3)
+  const bad = await tally(['project', 'jira', '900', 'maybe', '--json'], env)
+  assert.equal(bad.code, 2)
+})
+
+test('bita-hook keeps deleted registrations as orphans and records merges', async (t) => {
+  const { dir, env } = await sandbox(t)
+  await withFakeBita(env, { legacy: true })
+  assert.equal((await tally(['link', '1', '4', '--issue', 'PP-5', '--json'], env)).code, 0)
+
+  const mergeDoc = path.join(dir, 'merge.json')
+  await writeFile(mergeDoc, JSON.stringify({ schemaVersion: 1, event: 'merge', entry: { id: 2, segments: [{ entryId: 2 }, { entryId: 4 }] }, mergedIds: [4] }))
+  const merged = await tally(['bita-hook', '--file', mergeDoc, '--json'], env)
+  assert.equal(merged.code, 0, merged.stdout + merged.stderr)
+  assert.deepEqual(merged.json.data.merged, [4])
+  assert.deepEqual(merged.json.data.conflict, { survivorId: 2, issues: ['PP-5'], pendingEntryIds: [2] })
+
+  const deleteDoc = path.join(dir, 'delete.json')
+  await writeFile(deleteDoc, JSON.stringify({ schemaVersion: 1, event: 'delete', entry: { id: 1, segments: [{ entryId: 1 }, { entryId: 4 }] } }))
+  const deleted = await tally(['bita-hook', '--file', deleteDoc, '--json'], env)
+  assert.deepEqual(deleted.json.data.orphaned, [1, 4])
+
+  const db = new DatabaseSync(env['TALLY_DB_PATH'] as string, { readOnly: true })
+  const rows = db.prepare('SELECT entry_id, issue_key, orphaned_at IS NOT NULL AS orphaned FROM registrations ORDER BY entry_id').all()
+  const merges = db.prepare('SELECT absorbed_id, survivor_id FROM merges').all()
+  db.close()
+  assert.deepEqual(rows.map((row) => ({ ...row })), [{ entry_id: 1, issue_key: 'PP-5', orphaned: 1 }, { entry_id: 4, issue_key: 'PP-5', orphaned: 1 }])
+  assert.deepEqual(merges.map((row) => ({ ...row })), [{ absorbed_id: 4, survivor_id: 2 }])
+
+  const pending = await tally(['summary', '--pending', '--no-notes', '--json'], env)
+  assert.deepEqual(pending.json.data.groups.flatMap((group: { entryIds: number[] }) => group.entryIds), [1, 4, 2])
+
+  const ignored = path.join(dir, 'start.json')
+  await writeFile(ignored, JSON.stringify({ event: 'start', entry: { id: 9 } }))
+  assert.equal((await tally(['bita-hook', '--file', ignored, '--json'], env)).json.data.ignored, true)
 })
