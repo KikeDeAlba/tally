@@ -1,6 +1,6 @@
 import { agents } from '@kikedealba/kit'
 import { UsageError } from '../../errors.ts'
-import { integration, register, stableBinCommand, unregister } from '../../setup.ts'
+import { installAgents, register, stableBinCommand, uninstallAgents, unregister } from '../../setup.ts'
 import { configPath, databasePath } from '../../paths.ts'
 import { parseCommandArgs, readBoolean, readString } from '../args.ts'
 import { successEnvelope, writeJson, writeOut } from '../output.ts'
@@ -20,7 +20,7 @@ export async function runSetup(argv: readonly string[]): Promise<number> {
   const selection = readAgents(readString(args, 'agents'))
   const bin = await stableBinCommand()
   const manifestPath = await register()
-  const steps = readBoolean(args, 'no-agents') ? [] : await agents.installIntegration(integration(), { agents: selection })
+  const steps = readBoolean(args, 'no-agents') ? [] : await installAgents(selection)
   const bita = await findTool('bita', { capability: 'time.entries.read' })
   const inkwell = await findTool('inkwell', { capability: 'docs.entry-notes' })
   const atl = await findTool('atl')
@@ -41,7 +41,7 @@ export async function runSetup(argv: readonly string[]): Promise<number> {
 
 export async function runUninstall(argv: readonly string[]): Promise<number> {
   const args = parseCommandArgs(argv, {})
-  const steps = await agents.uninstallIntegration(integration(), { agents: 'all' })
+  const steps = await uninstallAgents()
   const removed = await unregister()
   if (readBoolean(args, 'json')) {
     writeJson(successEnvelope('uninstall', { unregistered: removed, steps }))

@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { buildSummary, type SummaryOptions } from '../src/cli/commands/summary.ts'
+import { briefSummary, buildSummary, type SummaryOptions } from '../src/cli/commands/summary.ts'
 import { applyRegistrations, expandSegments } from '../src/domain/expand.ts'
 import { collectEntries } from '../src/domain/collect.ts'
 import { filledSections, loadSummaryDocs } from '../src/domain/notes.ts'
@@ -176,4 +176,50 @@ test('notes past the budget keep their path but drop the body', async () => {
 
 test('filled sections skip empty headings and front matter', () => {
   assert.deepEqual(filledSections('---\ntitle: x\n---\n## Contexto\n\n## Qué se hizo\n- algo\n### detalle\n## Pendiente\n<!-- vacío -->\n'), ['Qué se hizo'])
+})
+
+test('the brief shape keeps what the push needs and moves the mapping to one entry per project', async () => {
+  const config: TallyConfig = {
+    ...emptyConfig(),
+    jira: { siteUrl: 'https://x.atlassian.net', accountId: 'acc' },
+    projectMapping: {
+      '789': { projectName: 'Plataforma', jiraProjectKey: 'INN', parentKey: 'INN-1213', storiesByEpic: { 'INN-1213': { devops: { key: 'INN-1300', summary: 'DevOps', verifiedAt: 'x' } } } },
+    },
+  }
+  const full = await summarize(
+    [bitaEntry({ id: 1, durationSeconds: 10 * 3600 }), bitaEntry({ id: 2, description: 'daily', kind: 'remote-meeting', start: '2026-09-17T16:00:00Z', durationSeconds: 1800 })],
+    { config },
+  )
+  const brief = briefSummary(full)
+  assert.deepEqual(Object.keys(brief.data).sort(), ['groups', 'jiraHuman', 'nonJiraHuman', 'projects', 'totalHuman'])
+  assert.equal(brief.data.groups.length, full.data.groups.length)
+  const [first, second] = brief.data.groups
+  assert.deepEqual(Object.keys(first ?? {}).sort(), ['days', 'docs', 'entryIds', 'estimateHuman', 'jira', 'kind', 'pages', 'part', 'projectId', 'summary', 'totalHuman', 'worklogs'])
+  assert.deepEqual(first?.part, { index: 1, count: 2 })
+  assert.deepEqual(Object.keys(first?.worklogs[0] ?? {}).sort(), ['entryId', 'startLocal', 'startedJira', 'timeSpent'])
+  assert.equal(first?.worklogs[0]?.timeSpent, full.data.groups[0]?.worklogs[0]?.timeSpent)
+  assert.ok(!('jiraProjectKey' in (second ?? {})))
+  const meeting = brief.data.groups.find((group) => group.kind === 'remote-meeting')
+  assert.equal(meeting?.meetings?.[0]?.entryId, 2)
+  assert.ok(!('meeting' in (meeting ?? {})))
+  assert.deepEqual(Object.keys(brief.data.projects), ['789'])
+  assert.equal(brief.data.projects['789']?.jiraProjectKey, 'INN')
+  assert.equal(brief.data.projects['789']?.epicMode, 'fixed')
+  assert.equal((brief.data.projects['789'] as Record<string, any> | undefined)?.['jiraStories']?.['devops']?.key, 'INN-1300')
+  assert.ok(!('jiraStoriesByEpic' in (brief.data.projects['789'] ?? {})))
+  for (const dropped of ['jira', 'storyThemes', 'filter', 'maxTaskSeconds']) assert.ok(!(dropped in brief.meta), dropped)
+  assert.equal(typeof brief.meta.alreadyRegistered, 'number')
+  assert.deepEqual(brief.meta.warnings, full.meta.warnings)
+  assert.ok(JSON.stringify(brief).length < JSON.stringify(full).length)
+})
+
+test('per-run projects keep the stories of every epic in the brief shape', async () => {
+  const config: TallyConfig = {
+    ...emptyConfig(),
+    projectMapping: { '789': { projectName: 'Plataforma', jiraProjectKey: 'INN', epicResolved: true, storiesByEpic: { 'INN-1': { backend: { key: 'INN-2', summary: 'Backend', verifiedAt: 'x' } } } } },
+  }
+  const brief = briefSummary(await summarize([bitaEntry({ id: 1 })], { config }))
+  assert.equal(brief.data.projects['789']?.epicMode, 'per-run')
+  assert.deepEqual(Object.keys((brief.data.projects['789'] as Record<string, any> | undefined)?.['jiraStoriesByEpic'] ?? {}), ['INN-1'])
+  assert.ok(!('jiraStories' in (brief.data.projects['789'] ?? {})))
 })
