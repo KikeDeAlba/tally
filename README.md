@@ -229,7 +229,9 @@ proyectos que van a Jira, sin los que pases con `--exclude <proyecto de bita>`
 la CLI de atl (`atl api call … --json`, solo lectura), en el sitio de
 `--site` o el de `tally config set-jira --atl-site`:
 
-- La persona se busca por nombre o correo. Si hay varias, falla con
+- La persona se busca por nombre o correo. Gana el nombre exacto; si no, la
+  única persona activa cuyo nombre o correo contiene todas las palabras de la
+  búsqueda (sin acentos, como palabra o inicio de palabra). Si hay varias, falla con
   `USER_AMBIGUOUS` y `data.candidates[]` (`displayName`, `email` si es visible,
   `accountId`) para repetir con `--account-id`; si no hay ninguna,
   `USER_NOT_FOUND`.

@@ -142,7 +142,17 @@ export function pickUser(users: readonly JiraUser[], query: string): { user: Jir
   const active = people.filter((user) => user.active)
   const pool = active.length > 0 ? active : people
   if (pool.length === 1) return { user: pool[0]! }
-  return { candidates: pool }
+  const queryWords = words(query)
+  const covering = queryWords.length === 0 ? [] : pool.filter((user) => {
+    const own = [...words(user.displayName), ...(user.email ? words(user.email) : [])]
+    return queryWords.every((word) => own.some((candidate) => candidate.startsWith(word)))
+  })
+  if (covering.length === 1) return { user: covering[0]! }
+  return { candidates: covering.length > 1 ? covering : pool }
+}
+
+function words(value: string): string[] {
+  return normalize(value).split(/[^\p{L}\p{N}]+/u).filter((word) => word.length > 0)
 }
 
 function candidate(user: JiraUser) {

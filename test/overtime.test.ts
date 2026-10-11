@@ -176,6 +176,21 @@ test('a user search picks the only person, an exact name among several, or repor
   assert.equal('candidates' in pickUser([user('a', 'Ana López'), user('c', 'Ana Ruiz')], 'Ana') ? 2 : 0, 2)
   assert.deepEqual(pickUser([], 'Zoe'), { candidates: [] })
   assert.deepEqual(pickUser([user('a', 'Ana Pérez', { active: false }), user('b', 'Ana Pérez Gómez')], 'ana perez'), { user: user('a', 'Ana Pérez', { active: false }) })
+  const team = [
+    user('j1', 'Jesús Enrique De Alba Gaytan'),
+    user('j2', 'Jesús Pérez'),
+    user('j3', 'Enrique Alba Ruiz'),
+    user('j4', 'María De la Rosa'),
+    user('j5', 'Jesus Enrique Albarrán Dealba', { active: false }),
+  ]
+  assert.deepEqual(pickUser(team, 'Jesús Enrique De Alba'), { user: team[0] })
+  assert.deepEqual(pickUser(team, 'jesus enrique  de alba'), { user: team[0] })
+  assert.deepEqual(pickUser(team, 'Enrique Gayt'), { user: team[0] })
+  assert.deepEqual(pickUser([user('m1', 'Mario Ortega', { email: 'mortega@example.com' }), user('m2', 'Mario Ruiz')], 'mario mortega'), { user: user('m1', 'Mario Ortega', { email: 'mortega@example.com' }) })
+  const twins = [user('k1', 'Jesús Enrique López'), user('k2', 'Jesús Enrique Mora'), user('k3', 'Jesús Pérez')]
+  assert.deepEqual(pickUser(twins, 'Jesus Enrique'), { candidates: [twins[0], twins[1]] })
+  assert.deepEqual(pickUser([user('e1', 'Enrique Alba'), user('e2', 'Alba Enrique Soto')], 'Enrique Alba'), { user: user('e1', 'Enrique Alba') })
+  assert.deepEqual(pickUser([user('e3', 'Enrique Albarrán'), user('e2', 'Alba Enrique Soto')], 'Enrique Alba'), { candidates: [user('e3', 'Enrique Albarrán'), user('e2', 'Alba Enrique Soto')] })
 })
 
 test('overtime --user with several matches answers USER_AMBIGUOUS with the candidates', async (t) => {
