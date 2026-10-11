@@ -6,7 +6,7 @@ import { defineManifest, registerTool, stableBin, unregisterTool, type ToolManif
 import { PACKAGE_ROOT, VERSION } from './version.ts'
 import { SUBSCRIBED_EVENTS } from './cli/commands/hook.ts'
 
-export const CAPABILITIES = ['timesheet.summary', 'timesheet.map', 'timesheet.link']
+export const CAPABILITIES = ['timesheet.summary', 'timesheet.status', 'timesheet.map', 'timesheet.link']
 
 export const INSTALL_HINT = 'npm install -g @kikedealba/tally && tally setup'
 
@@ -17,6 +17,7 @@ export const CLAUDE_PLUGIN: agents.ClaudePluginSpec = { marketplace: 'KikeDeAlba
 export const CLAUDE_PERMISSIONS = [
   'Bash(tally summary:*)',
   'Bash(tally groups:*)',
+  'Bash(tally status:*)',
   'Bash(tally map list:*)',
   'Bash(tally map set:*)',
   'Bash(tally map story:*)',

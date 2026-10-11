@@ -17,6 +17,7 @@ medidas: nada de estimar desde commits.
 
 - **Consulta** («qué trabajé», «qué me falta subir»): `tally summary --pending`
   (o con rango; la tabla basta) y resume. No se escribe nada.
+- **Balance por proyecto** («cuánto llevo subido este mes»): `tally status month`.
 - **Volcado** («sube mis horas a Jira»): el procedimiento completo de
   [procedure.md](procedure.md). Si está el subagente `tally-push`, delega en
   él en dos llamadas: «modo plan» (devuelve propuesta y decisiones) y, tras

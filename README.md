@@ -86,6 +86,8 @@ tally summary --pending                      # lo que falta subir, agrupado
 tally summary week --json                    # la semana, en el envelope de kit
 tally summary --from 2026-10-01 --to 2026-10-09
 tally groups --pending --json                # alias de summary
+tally status month                           # subido, pendiente, excluido y fuera de Jira por proyecto
+tally status --last-days 30 --project 789 --entries --json
 
 tally map list
 tally map set <projectId> <JIRAKEY> --parent <JIRAKEY-123>   # siempre a esa épica
@@ -165,6 +167,32 @@ Una entrada unificada con `bita merge` da un worklog por cada bloque original,
 cada uno con su id en `entryIds`. Cada bloque se registra por su propio id, así
 que `tally link` recibe todos los `entryIds` del grupo.
 
+### `status`
+
+El balance de un rango por proyecto, sin agrupar y sin leer notas de inkwell.
+Toma las entradas de bita, separa los bloques de las unificadas como `summary`
+(cada uno con su día y su duración) y cruza los registros de tally y los
+proyectos fuera de Jira. Cada segundo cae en una sola columna:
+
+- `registeredSeconds`: atado a un issue con `tally link`.
+- `pendingSeconds`: lo que `summary --pending` propondría subir.
+- `excludedSeconds`: lo que `summary` excluye (corriendo, título de menos de 3
+  letras, menos de un minuto). Un cronómetro que sigue corriendo cae aquí,
+  también fuera de Jira, salvo con `--include-running`.
+- `nonJiraSeconds`: proyectos fuera de Jira (`tally project jira … off`).
+
+Con `--json`, `data.projects[]` (`projectId`, `name`, `jira` y las cuatro
+columnas, de mayor a menor), `data.totals` con las mismas cuatro, y con
+`--entries` también `data.entries[]` (`entryId`, `registered`, `issueKey`,
+`jira`, `excludedReason`, `projectId`, `localDay`, `seconds`). `meta` trae
+`range`, `projectId`, `entryCount`, `runningSeconds` (lo que sigue corriendo),
+`includeRunning` y `warnings` (corriendo, solapes, conflictos de merge y la
+migración pendiente, como `summary`).
+
+Opciones: el rango igual que `summary` (preset, `--from`/`--to`,
+`--last-days`, `--timezone`), `--project <id|clave|nombre>`, `--entries` e
+`--include-running` (cuenta lo que sigue corriendo en su columna, hasta ahora).
+
 ## Eventos de bita
 
 `tally setup` suscribe tally a los eventos `delete` y `merge` de bita (por el
@@ -189,10 +217,11 @@ registro de kit, comando `tally bita-hook`):
 
 ## Capacidades
 
-`tally capabilities --json` anuncia `timesheet.summary`, `timesheet.map` y
-`timesheet.link`. Cualquier herramienta puede encontrar tally con kit
+`tally capabilities --json` anuncia `timesheet.summary`, `timesheet.status`,
+`timesheet.map` y `timesheet.link`. Cualquier herramienta puede encontrar tally con kit
 (`findTool('tally', { capability: 'timesheet.summary' })`) y llamarlo con
-`--json`; la pestaña Jira de Den usa `tally summary --pending --json`, la forma completa.
+`--json`; la pestaña Jira de Den usa `tally summary --pending --json`, la forma completa,
+y la ventana de reportes, `tally status --json`.
 
 ## Desarrollo
 

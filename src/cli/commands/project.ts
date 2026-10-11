@@ -1,5 +1,5 @@
-import { NotFoundError, UsageError } from '../../errors.ts'
-import { requireBita } from '../../integrations/bita.ts'
+import { UsageError } from '../../errors.ts'
+import { findProject, projectNotFound, requireBita } from '../../integrations/bita.ts'
 import { configPath } from '../../paths.ts'
 import { projectGoesToJira, readConfig, setProjectJira } from '../../state/config.ts'
 import { parseCommandArgs, readBoolean } from '../args.ts'
@@ -15,12 +15,8 @@ export async function runProject(argv: readonly string[]): Promise<number> {
   if (!ref || (value !== undefined && value !== 'on' && value !== 'off')) throw new UsageError(USAGE)
 
   const projects = await (await requireBita()).projects()
-  const wanted = ref.toLowerCase()
-  const project =
-    projects.find((candidate) => String(candidate.id) === ref) ??
-    projects.find((candidate) => candidate.key !== null && candidate.key.toLowerCase() === wanted) ??
-    projects.find((candidate) => candidate.name.toLowerCase() === wanted)
-  if (!project) throw new NotFoundError(`No bita project matches "${ref}".`, 'PROJECT_NOT_FOUND', 'Run "bita projects" to list them.')
+  const project = findProject(projects, ref)
+  if (!project) throw projectNotFound(ref)
 
   const config = value === undefined ? await readConfig() : await setProjectJira(project.id, value === 'on')
   const jira = projectGoesToJira(config, project.id, project.jira)
