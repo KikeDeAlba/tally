@@ -144,6 +144,23 @@ test('summary groups the pending entries from bita, with the notes from inkwell'
   assert.deepEqual((await readFile(env['FAKE_BITA_LOG'] as string, 'utf8')).trim().split('\n').map((line) => JSON.parse(line) as string[]).filter((call) => call[0] === 'entries').at(-1), ['entries', 'week'])
 })
 
+test('summary --brief gives the compact envelope the skill and the subagent read', async (t) => {
+  const { env } = await sandbox(t)
+  await withFakeBita(env, { inkwell: true })
+  const full = await tally(['summary', '--pending', '--json'], env)
+  const brief = await tally(['summary', '--pending', '--brief', '--json'], env)
+  assert.equal(brief.code, 0, brief.stdout + brief.stderr)
+  assert.equal(brief.json.ok, true)
+  assert.deepEqual(brief.json.data.groups.map((group: { entryIds: number[] }) => group.entryIds), full.json.data.groups.map((group: { entryIds: number[] }) => group.entryIds))
+  assert.equal(brief.json.data.groups[0].docs[0].markdown, full.json.data.groups[0].docs[0].markdown)
+  assert.deepEqual(brief.json.data.groups[0].pages, [{ pageId: 5, title: 'Pipeline', issues: ['INN-9'] }])
+  assert.ok(!('storyThemes' in brief.json.meta))
+  assert.ok(brief.stdout.length < full.stdout.length)
+  const table = await tally(['summary', '--pending', '--brief'], env)
+  assert.equal(table.code, 0)
+  assert.match(table.stdout, /ajustar pipeline/)
+})
+
 test('link marks entries registered, refuses projects outside Jira, and unlink brings them back', async (t) => {
   const { env } = await sandbox(t)
   await withFakeBita(env, { legacy: true })

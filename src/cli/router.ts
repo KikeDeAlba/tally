@@ -18,7 +18,7 @@ Usage:
   tally summary [preset] [--pending|--registered] [--include-running] [--json]
                 [--from YYYY-MM-DD] [--to YYYY-MM-DD] [--last-days N] [--timezone TZ]
                 [--case-insensitive] [--max-task-hours N] [--estimate-step-minutes N]
-                [--no-notes] [--notes-mode inline|path|both] [--notes-budget-kb N]
+                [--no-notes] [--notes-mode inline|path|both] [--notes-budget-kb N] [--brief]
   tally groups ...                 Same as summary
   tally map list [--json]
   tally map set <projectId> <JIRAKEY> [--parent KEY-123 | --no-epic] [--issue-type NAME] [--hierarchy H]

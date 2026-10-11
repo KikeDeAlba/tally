@@ -23,10 +23,40 @@ npm install -g @kikedealba/tally
 tally setup
 ```
 
-`tally setup` se registra en kit e instala la skill `tally` y los comandos
-`/tally-pending` y `/tally-push` en los agentes que encuentre (Claude Code,
-OpenCode, Codex y Gemini CLI). `--agents claude,codex` elige cuáles, `--agents
-all` los fuerza todos y `--no-agents` solo registra.
+`tally setup` se registra en kit y conecta tally con los agentes que encuentre
+(`--agents claude,codex` elige cuáles, `--agents all` los fuerza todos y
+`--no-agents` solo registra):
+
+- **Claude Code** recibe el plugin `tally` de este repositorio, que es su propio
+  marketplace: `claude plugin marketplace add KikeDeAlba/tally` y `claude plugin
+  install tally@tally --scope user` (o `update`, si ya estaba). Los archivos
+  sueltos que dejaba tally 0.1 en `~/.claude` (skill y comandos enlazados) se
+  quitan, y se conservan los permisos de `tally summary`, `tally link` y
+  compañía. Para que el cambio surta efecto hay que reiniciar Claude Code.
+- **OpenCode, Codex y Gemini CLI** reciben la skill `tally` con sus archivos de
+  apoyo y `/tally-pending` y `/tally-push` en el formato de cada uno.
+
+### El plugin de Claude Code
+
+Sin `tally setup`, el plugin se instala desde Claude Code (2.1.275 o posterior)
+con:
+
+```
+/plugin install tally --marketplace KikeDeAlba/tally
+```
+
+| Pieza | Qué es | Cuándo cuesta contexto |
+|---|---|---|
+| `skills/tally/SKILL.md` | La skill: cuándo usarla, el flujo en breve y las reglas duras | Su descripción, siempre; el cuerpo (menos de 150 líneas), al usarla |
+| `skills/tally/procedure.md` | El procedimiento completo del volcado | Solo cuando se lee para escribir en Jira |
+| `skills/tally/meetings.md` | Lo que cambia en los grupos de reunión | Solo si hay reuniones |
+| `agents/tally-push.md` | Subagente (Bash y Read) que hace todo el volcado con tally y atl | Trabaja en su propia ventana y devuelve solo la tabla de lo creado |
+| `skills/tally-pending` | `/tally-pending`: lo que falta subir, sin escribir nada | Nada hasta que el usuario lo escribe |
+| `skills/tally-push` | `/tally-push`: plan del subagente, decisiones y una sola confirmación, y escritura | Nada hasta que el usuario lo escribe |
+
+Jira se toca solo con la CLI de atl. Las reglas de redacción viven en inkwell
+(`inkwell guide writing`); la skill guarda solo un resumen mínimo para cuando
+inkwell no está. Grabar y consultar reuniones es de recap.
 
 Hace falta Node 24 o superior, y bita instalado (`npm install -g @kikedealba/bita
 && bita setup`).
@@ -103,8 +133,33 @@ Opciones: un preset (`today`, `yesterday`, `week`, `last-week`, `month`,
 `last-month`) o `--from`/`--to`/`--last-days`; `--pending` o `--registered`;
 `--include-running`; `--case-insensitive`; `--max-task-hours N` (8 por
 defecto); `--estimate-step-minutes N` (30 por defecto); `--no-notes`;
-`--notes-mode inline|path|both`; `--notes-budget-kb N`. Sin rango, `--pending`
-mira los últimos 90 días.
+`--notes-mode inline|path|both`; `--notes-budget-kb N`; `--brief`. Sin rango,
+`--pending` mira los últimos 90 días.
+
+### `summary --brief`
+
+La forma compacta, la que piden siempre la skill y el subagente. Con `--json`:
+
+- `data.groups[]`: `summary`, `projectId`, `jira`, `kind`, `totalHuman`,
+  `estimateHuman`, `days`, `entryIds`, `worklogs[]` (`entryId`, `startedJira`,
+  `startLocal`, `timeSpent`), `part` (`index`, `count`, solo si el tope de 8
+  horas partió el título), `meetings[]` (solo reuniones), `docs[]` (`entryId`,
+  `path`, `sections`, `markdown`, y `truncated`/`missing` cuando aplican) y
+  `pages[]` (`pageId`, `title`, `issues`).
+- `data.projects[projectId]`: el destino en Jira una sola vez por proyecto en
+  lugar de repetirlo en cada grupo (`jiraProjectKey`, `jiraSite`, `epicMode`,
+  `hierarchy`, `jiraEpicKey`, `epicResolved`, `jiraStories`, los tipos de
+  issue, y `jiraStoriesByEpic` solo en los proyectos `per-run`).
+- `data.totalHuman`, `jiraHuman`, `nonJiraHuman`.
+- `meta`: `range`, `groupCount`, `entryCount`, `excluded` (con `reason`),
+  `alreadyRegistered` (conteo), `overlaps`, `unmappedProjects`, `nonJira`
+  (`totalHuman` y proyectos), `conflicts`, `notes` (`provider`, `missing`,
+  `truncatedEntryIds`) y `warnings`.
+
+Fuera quedan `storyThemes` y los datos de Jira de la configuración (los da
+`tally config get --json`), el filtro, los segundos y horas en número, y los
+campos de cada grupo que el volcado no usa. Sin `--json`, la tabla es la misma
+de siempre.
 
 Una entrada unificada con `bita merge` da un worklog por cada bloque original,
 cada uno con su id en `entryIds`. Cada bloque se registra por su propio id, así
@@ -137,7 +192,7 @@ registro de kit, comando `tally bita-hook`):
 `tally capabilities --json` anuncia `timesheet.summary`, `timesheet.map` y
 `timesheet.link`. Cualquier herramienta puede encontrar tally con kit
 (`findTool('tally', { capability: 'timesheet.summary' })`) y llamarlo con
-`--json`; la pestaña Jira de Den usa `tally summary --pending --json`.
+`--json`; la pestaña Jira de Den usa `tally summary --pending --json`, la forma completa.
 
 ## Desarrollo
 
