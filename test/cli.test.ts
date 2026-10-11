@@ -170,7 +170,7 @@ test('status reports registered, pending and outside-Jira time per project from 
 
   const result = await tally(['status', '--last-days', '30', '--entries', '--json'], env)
   assert.equal(result.code, 0, result.stdout + result.stderr)
-  assert.deepEqual(result.json.data.totals, { registeredSeconds: 2700, pendingSeconds: 5400, excludedSeconds: 0, nonJiraSeconds: 1800 })
+  assert.deepEqual(result.json.data.totals, { registeredSeconds: 2700, pendingSeconds: 5400, excludedSeconds: 0, nonJiraSeconds: 1800, estimateSeconds: 9000 })
   assert.deepEqual(result.json.data.projects.map((project: { projectId: number; jira: boolean }) => [project.projectId, project.jira]), [[789, true], [900, false]])
   assert.deepEqual(result.json.data.entries.map((entry: { entryId: number; registered: boolean; issueKey: string | null }) => [entry.entryId, entry.registered, entry.issueKey]), [
     [1, false, null],
@@ -182,11 +182,23 @@ test('status reports registered, pending and outside-Jira time per project from 
   assert.equal(calls.filter((call) => call[0] === 'entries' && call[1] === '--from').length, 1)
 
   const byName = await tally(['status', '--project', 'can doo with pet', '--json'], env)
-  assert.deepEqual(byName.json.data.totals, { registeredSeconds: 0, pendingSeconds: 0, excludedSeconds: 0, nonJiraSeconds: 1800 })
+  assert.deepEqual(byName.json.data.totals, { registeredSeconds: 0, pendingSeconds: 0, excludedSeconds: 0, nonJiraSeconds: 1800, estimateSeconds: 0 })
   assert.equal(byName.json.data.entries, undefined)
 
   const byId = await tally(['status', '--project', '789', '--json'], env)
-  assert.deepEqual(byId.json.data.totals, { registeredSeconds: 2700, pendingSeconds: 5400, excludedSeconds: 0, nonJiraSeconds: 0 })
+  assert.deepEqual(byId.json.data.totals, { registeredSeconds: 2700, pendingSeconds: 5400, excludedSeconds: 0, nonJiraSeconds: 0, estimateSeconds: 9000 })
+
+  assert.equal(result.json.meta.estimateStepMinutes, 30)
+  const summary = await tally(['summary', '--last-days', '30', '--json'], env)
+  const summed = new Map<number, number>()
+  for (const group of summary.json.data.groups as { projectId: number; estimateSeconds: number }[]) summed.set(group.projectId, (summed.get(group.projectId) ?? 0) + group.estimateSeconds)
+  assert.deepEqual(new Map(result.json.data.projects.map((project: { projectId: number; estimateSeconds: number }) => [project.projectId, project.estimateSeconds])), summed)
+
+  const stepped = await tally(['status', '--last-days', '30', '--estimate-step-minutes', '60', '--json'], env)
+  assert.equal(stepped.json.data.totals.estimateSeconds, 10800)
+  assert.equal(stepped.json.meta.estimateStepMinutes, 60)
+  const badStep = await tally(['status', '--estimate-step-minutes', '0', '--json'], env)
+  assert.equal(badStep.code, 2)
 
   const missing = await tally(['status', '--project', 'nope', '--json'], env)
   assert.equal(missing.code, 3)

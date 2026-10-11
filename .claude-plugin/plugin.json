@@ -1,7 +1,7 @@
 {
   "name": "tally",
   "description": "Group bita time entries into Jira-ready work, push it through atl with a dedicated subagent, and keep track of what was logged",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "author": {
     "name": "Jesus Enrique De Alba Gaytan",
     "url": "https://github.com/KikeDeAlba"
