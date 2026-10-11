@@ -27,8 +27,15 @@ export interface JiraSearchPage {
   nextPageToken: string | null
 }
 
+export interface AtlSite {
+  name: string
+  url: string
+  default: boolean
+}
+
 export interface AtlClient {
   call(operation: ReadOperation, args: Record<string, unknown>, site?: string): Promise<unknown>
+  sites?(): Promise<AtlSite[]>
 }
 
 export function record(value: unknown): Record<string, unknown> {
@@ -60,6 +67,43 @@ export function toJiraField(raw: unknown): JiraField | null {
   return { id, name, custom: data['custom'] === true, type: text(record(data['schema'])['type']) }
 }
 
+export function toAtlSite(raw: unknown): AtlSite | null {
+  const data = record(raw)
+  const name = text(data['name'])
+  const url = text(data['url'])
+  if (!name || !url) return null
+  return { name, url, default: data['default'] === true }
+}
+
+export function siteOrigin(value: string | undefined): string | null {
+  const raw = value?.trim()
+  if (!raw) return null
+  try {
+    const url = new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(raw) ? raw : `https://${raw}`)
+    if (url.protocol !== 'https:' && url.protocol !== 'http:') return null
+    if (!url.hostname.includes('.')) return null
+    return url.origin
+  } catch {
+    return null
+  }
+}
+
+export function siteBaseUrl(sites: readonly AtlSite[], site: string | undefined, env: NodeJS.ProcessEnv = process.env): string | null {
+  const wanted = site?.trim()
+  if (wanted) {
+    const name = wanted.toLowerCase()
+    const origin = siteOrigin(wanted)
+    const found = sites.find((item) => item.name.toLowerCase() === name) ?? (origin === null ? undefined : sites.find((item) => siteOrigin(item.url) === origin))
+    return found ? siteOrigin(found.url) : origin
+  }
+  const fallback = sites.find((item) => item.default) ?? sites[0]
+  return fallback ? siteOrigin(fallback.url) : siteOrigin(env['ATL_SITE_URL'])
+}
+
+export function issueUrl(baseUrl: string | null, key: string): string | null {
+  return baseUrl === null ? null : `${baseUrl}/browse/${encodeURIComponent(key)}`
+}
+
 function atlFailure(operation: string, error: { code?: string; message?: string; hint?: string } | undefined): TallyError {
   const code = error?.code ? `ATL_${error.code.replace(/^ATL_/, '')}` : 'ATL_FAILED'
   return new ConflictError(`atl api call ${operation}: ${error?.message ?? 'failed'}`, code, error?.hint)
@@ -78,6 +122,16 @@ export class CliAtl implements AtlClient {
     const { envelope } = await invokeTool(this.tool, argv, { timeoutMs: 120_000 })
     if (!envelope.ok) throw atlFailure(operation, envelope.error)
     return envelope.data
+  }
+
+  async sites(): Promise<AtlSite[]> {
+    try {
+      const { envelope } = await invokeTool(this.tool, ['site', 'ls'], { timeoutMs: 30_000 })
+      if (!envelope.ok || !Array.isArray(envelope.data)) return []
+      return envelope.data.map(toAtlSite).filter((site): site is AtlSite => site !== null)
+    } catch {
+      return []
+    }
   }
 }
 
@@ -111,6 +165,10 @@ export class JiraReader {
     })
     const token = text(data['nextPageToken'])
     return { issues, nextPageToken: data['isLast'] === true || !token ? null : token }
+  }
+
+  async siteUrl(): Promise<string | null> {
+    return siteBaseUrl((await this.atl.sites?.()) ?? [], this.site)
   }
 }
 

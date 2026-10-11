@@ -20,7 +20,7 @@ import {
 } from '../../domain/overtime.ts'
 import { localDay } from '../../domain/timezone.ts'
 import { requireBita, type BitaEntry } from '../../integrations/bita.ts'
-import { JiraReader, record, requireAtl, text, type JiraField, type JiraUser } from '../../integrations/atl.ts'
+import { issueUrl, JiraReader, record, requireAtl, text, type JiraField, type JiraUser } from '../../integrations/atl.ts'
 import { configPath } from '../../paths.ts'
 import { cachedStartField, cacheStartField, excludedJiraProjects, readConfig, updateExcludedJiraProjects, type TallyConfig } from '../../state/config.ts'
 import { parseCommandArgs, readBoolean, readString, readStringList, type ParsedArgs } from '../args.ts'
@@ -56,6 +56,7 @@ export interface OvertimeIssue {
   status: string | null
   startDate: string | null
   estimateSeconds: number | null
+  url: string | null
 }
 
 export interface OvertimeMonth extends MonthOvertime {
@@ -214,7 +215,7 @@ export function buildJql(accountId: string, fieldId: string, month: string, excl
   return `${clauses.join(' AND ')} ORDER BY ${field} ASC, key ASC`
 }
 
-export function toOvertimeIssue(key: string, fields: Record<string, unknown>, startFieldId: string): OvertimeIssue {
+export function toOvertimeIssue(key: string, fields: Record<string, unknown>, startFieldId: string, baseUrl: string | null = null): OvertimeIssue {
   const estimate = fields['timeoriginalestimate']
   const start = text(fields[startFieldId])
   return {
@@ -224,18 +225,19 @@ export function toOvertimeIssue(key: string, fields: Record<string, unknown>, st
     status: text(record(fields['status'])['name']),
     startDate: start ? start.slice(0, 10) : null,
     estimateSeconds: typeof estimate === 'number' && estimate > 0 ? estimate : null,
+    url: issueUrl(baseUrl, key),
   }
 }
 
 const MAX_PAGES = 200
 
-export async function searchAll(jira: JiraReader, jql: string, startFieldId: string): Promise<OvertimeIssue[]> {
+export async function searchAll(jira: JiraReader, jql: string, startFieldId: string, baseUrl: string | null = null): Promise<OvertimeIssue[]> {
   const fields = ['summary', 'project', 'status', 'timeoriginalestimate', startFieldId, 'resolutiondate']
   const issues: OvertimeIssue[] = []
   let token: string | null = null
   for (let page = 0; page < MAX_PAGES; page += 1) {
     const result = await jira.searchPage(jql, fields, token)
-    for (const issue of result.issues) issues.push(toOvertimeIssue(issue.key, issue.fields, startFieldId))
+    for (const issue of result.issues) issues.push(toOvertimeIssue(issue.key, issue.fields, startFieldId, baseUrl))
     if (!result.nextPageToken || result.issues.length === 0) return issues
     token = result.nextPageToken
   }
@@ -269,21 +271,24 @@ function jiraMonth(month: string, issues: OvertimeIssue[], rate: PayRate): Overt
 async function coworkerReport(args: ParsedArgs, config: TallyConfig, months: string[], rate: PayRate, now: Date) {
   const site = readString(args, 'site') ?? config.jira?.site
   const jira = new JiraReader(await requireAtl(), site)
+  const pendingSiteUrl = jira.siteUrl().catch(() => null)
   const user = readString(args, 'user')
   const accountId = readString(args, 'account-id')
   const person = await resolvePerson(jira, { ...(user === undefined ? {} : { user }), ...(accountId === undefined ? {} : { accountId }) })
   const startField = await resolveStartField(jira, config, site, readString(args, 'start-field'), now)
+  const siteUrl = await pendingSiteUrl
+  const warnings: string[] = siteUrl === null ? [`atl did not report the URL of ${site === undefined ? 'its default site' : `site "${site}"`}; issue links are omitted.`] : []
   const excluded = excludedJiraProjects(config)
   const queries: { month: string; jql: string }[] = []
   const result: OvertimeMonth[] = []
   for (const month of months) {
     const jql = buildJql(person.accountId, startField.id, month, excluded)
     queries.push({ month, jql })
-    result.push(jiraMonth(month, await searchAll(jira, jql, startField.id), rate))
+    result.push(jiraMonth(month, await searchAll(jira, jql, startField.id, siteUrl), rate))
   }
   return {
     report: buildReport({ name: person.displayName, accountId: person.accountId, source: 'jira' }, rate, result),
-    meta: { site: site ?? null, startField, excludedProjects: excluded, queries, warnings: [] as string[] },
+    meta: { site: site ?? null, siteUrl, startField, excludedProjects: excluded, queries, warnings },
   }
 }
 
@@ -321,6 +326,16 @@ function money(value: number | null, currency: string): string {
   return value === null ? '-' : `${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency}`
 }
 
+export function hyperlinksSupported(stream: { isTTY?: boolean } = process.stdout, env: NodeJS.ProcessEnv = process.env): boolean {
+  if (stream.isTTY !== true) return false
+  if (env['NO_COLOR'] !== undefined && env['NO_COLOR'] !== '') return false
+  return env['TERM'] !== 'dumb'
+}
+
+export function issueLabel(issue: Pick<OvertimeIssue, 'key' | 'url'>, links: boolean): string {
+  return links && issue.url !== null ? `\u001b]8;;${issue.url}\u001b\\${issue.key}\u001b]8;;\u001b\\` : issue.key
+}
+
 function printReport(report: OvertimeReport): void {
   const hours = (seconds: number) => (seconds === 0 ? '-' : formatDuration(seconds))
   const paid = report.rate.hourlyRate !== null
@@ -343,8 +358,9 @@ function printReport(report: OvertimeReport): void {
   const who = report.person.source === 'jira' ? `${report.person.name} (Jira)` : `${report.person.name} (timers)`
   writeOut(`${who}${paid ? `, ${money(report.rate.hourlyRate, report.rate.currency)} per hour` : ''}`)
   writeOut(renderTable(columns, rows))
+  const links = hyperlinksSupported()
   for (const month of report.months) {
-    if (month.withoutEstimate.length > 0) writeOut(`${month.month}: ${month.withoutEstimate.length} issues without estimate (${month.withoutEstimate.map((issue) => issue.key).join(', ')}).`)
+    if (month.withoutEstimate.length > 0) writeOut(`${month.month}: ${month.withoutEstimate.length} issues without estimate (${month.withoutEstimate.map((issue) => issueLabel(issue, links)).join(', ')}).`)
   }
   if (!paid) writeOut('Hours only; pass --salary-stdin (or --salary N) for the pay.')
 }

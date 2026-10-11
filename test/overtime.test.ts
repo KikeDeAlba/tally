@@ -8,9 +8,9 @@ import { fileURLToPath } from 'node:url'
 import { defineManifest, registerTool } from '@kikedealba/kit/registry'
 import { platformContext } from '@kikedealba/kit/platform'
 import { monthBounds, monthOvertime, monthsBetween, parseAmount, sumOvertime, type PayRate } from '../src/domain/overtime.ts'
-import { buildJql, findStartField, pickUser, resolveMonths } from '../src/cli/commands/overtime.ts'
+import { buildJql, findStartField, hyperlinksSupported, issueLabel, pickUser, resolveMonths } from '../src/cli/commands/overtime.ts'
 import { parseCommandArgs } from '../src/cli/args.ts'
-import { toJiraField, type JiraUser } from '../src/integrations/atl.ts'
+import { issueUrl, siteBaseUrl, toJiraField, type JiraUser } from '../src/integrations/atl.ts'
 import { bitaEntry } from './helpers/bita-entries.ts'
 import { TEST_TZ } from './helpers/entries.ts'
 
@@ -90,9 +90,14 @@ const ISSUES = [
   { key: 'INN-8', accountId: 'acc-ana', done: true, project: 'INN', start: '2026-09-30T22:00:00.000-0600', estimate: null },
 ]
 
+const SITES = [
+  { name: 'gruposti', url: 'https://gruposti.atlassian.net/', email: 'ana@example.com', default: true },
+  { name: 'otro', url: 'https://otro.atlassian.net', email: 'ana@example.com' },
+]
+
 async function withFakeAtl(env: NodeJS.ProcessEnv, state: Record<string, unknown> = {}) {
   await registerTool(defineManifest({ name: 'atl', version: '0.3.0', bin: [process.execPath, FAKE_ATL], capabilities: ['atlassian.sites', 'atlassian.api.call', 'jira.issue.read'] }), platformContext({ env }))
-  await writeFile(env['FAKE_ATL_STATE'] as string, JSON.stringify({ users: USERS, fields: FIELDS, issues: ISSUES, pageSize: 2, ...state }))
+  await writeFile(env['FAKE_ATL_STATE'] as string, JSON.stringify({ users: USERS, fields: FIELDS, issues: ISSUES, pageSize: 2, sites: SITES, ...state }))
 }
 
 async function atlCalls(env: NodeJS.ProcessEnv): Promise<string[][]> {
@@ -232,14 +237,16 @@ test('overtime for a coworker sums the original estimate of their Done issues by
   assert.equal(month.payX1, 3600)
   assert.equal(month.payMultiplied, 7200)
   assert.deepEqual(month.issues.map((issue: { key: string }) => issue.key), ['INN-1', 'INN-2', 'PP-1'])
-  assert.deepEqual(month.issues[0], { key: 'INN-1', summary: 'Trabajo INN-1', project: 'INN', status: 'Finalizada', startDate: '2026-10-01', estimateSeconds: 100 * HOUR })
-  assert.deepEqual(month.withoutEstimate, [{ key: 'INN-3', summary: 'Trabajo INN-3', project: 'INN', status: 'Finalizada', startDate: '2026-10-20', estimateSeconds: null }])
+  assert.deepEqual(month.issues[0], { key: 'INN-1', summary: 'Trabajo INN-1', project: 'INN', status: 'Finalizada', startDate: '2026-10-01', estimateSeconds: 100 * HOUR, url: 'https://gruposti.atlassian.net/browse/INN-1' })
+  assert.deepEqual(month.withoutEstimate, [{ key: 'INN-3', summary: 'Trabajo INN-3', project: 'INN', status: 'Finalizada', startDate: '2026-10-20', estimateSeconds: null, url: 'https://gruposti.atlassian.net/browse/INN-3' }])
+  assert.equal(meta.siteUrl, 'https://gruposti.atlassian.net')
   assert.deepEqual(data.totals, { estimateSeconds: 178 * HOUR, expectedSeconds: 160 * HOUR, overtimeSeconds: 18 * HOUR, payX1: 3600, payMultiplied: 7200 })
   assert.deepEqual(meta.startField, { id: 'customfield_10015', name: 'Start date', source: 'jira' })
   assert.ok(!result.stdout.includes('32000') && !result.stdout.includes('32,000') && !result.stderr.includes('32'))
 
   const calls = await atlCalls(env)
-  assert.ok(calls.every((call) => call[0] === 'api' && call[1] === 'call'))
+  assert.deepEqual(calls.filter((call) => call[0] === 'site'), [['site', 'ls']])
+  assert.ok(calls.filter((call) => call[0] !== 'site').every((call) => call[0] === 'api' && call[1] === 'call'))
   const searches = calls.filter((call) => call[2] === 'jira.searchAndReconsileIssuesUsingJql')
   assert.equal(searches.length, 2)
   const first = JSON.parse(searches[0]![4]!) as Record<string, unknown>
@@ -257,7 +264,7 @@ test('the start field is cached per site, and --start-field overrides it', async
   const second = await tally(['overtime', '--account-id', 'acc-ana', '--site', 'gruposti', '--month', '2026-10', '--json'], env)
   assert.equal(second.json.meta.startField.source, 'cache')
   assert.equal((await atlCalls(env)).filter((call) => call[2] === 'jira.getFields').length, 1)
-  assert.ok((await atlCalls(env)).every((call) => call.at(-2) === '--site' && call.at(-1) === 'gruposti'))
+  assert.ok((await atlCalls(env)).filter((call) => call[0] === 'api').every((call) => call.at(-2) === '--site' && call.at(-1) === 'gruposti'))
 
   const other = await tally(['overtime', '--account-id', 'acc-ana', '--site', 'otro', '--month', '2026-10', '--json'], env)
   assert.equal(other.json.meta.startField.source, 'jira')
@@ -315,6 +322,68 @@ test('the common exclusion list drops Jira projects for every coworker, without 
   assert.match(text.stdout, /Ana López \(Jira\), 200\.00 MXN per hour/)
   assert.match(text.stdout, /2026-10\s+170h\s+160h\s+10h\s+2,000\.00 MXN\s+4,000\.00 MXN/)
   assert.match(text.stdout, /1 issues without estimate \(INN-3\)/)
+})
+
+test('issue URLs come from the atl site, with or without a trailing slash', () => {
+  const sites = [
+    { name: 'gruposti', url: 'https://gruposti.atlassian.net/', default: true },
+    { name: 'otro', url: 'https://otro.atlassian.net', default: false },
+  ]
+  assert.equal(siteBaseUrl(sites, undefined), 'https://gruposti.atlassian.net')
+  assert.equal(siteBaseUrl(sites, 'otro'), 'https://otro.atlassian.net')
+  assert.equal(siteBaseUrl(sites, 'https://otro.atlassian.net/'), 'https://otro.atlassian.net')
+  assert.equal(siteBaseUrl(sites, 'nada'), null)
+  assert.equal(siteBaseUrl(sites, 'GrupoSTI'), 'https://gruposti.atlassian.net')
+  assert.equal(siteBaseUrl(sites, 'otro.atlassian.net'), 'https://otro.atlassian.net')
+  assert.equal(siteBaseUrl(sites, 'https://nuevo.atlassian.net/'), 'https://nuevo.atlassian.net')
+  assert.equal(siteBaseUrl(sites.map((item) => ({ ...item, default: false })), undefined), 'https://gruposti.atlassian.net')
+  assert.equal(siteBaseUrl([], undefined, { ATL_SITE_URL: 'https://env.atlassian.net/' }), 'https://env.atlassian.net')
+  assert.equal(siteBaseUrl([{ name: 'mal', url: 'https://mal.atlassian.net/\u001b]8;;x\u0007', default: true }], undefined), 'https://mal.atlassian.net')
+  assert.equal(siteBaseUrl([{ name: 'solo', url: 'https://solo.atlassian.net//', default: false }], undefined), 'https://solo.atlassian.net')
+  assert.equal(siteBaseUrl([], undefined, {}), null)
+  assert.equal(siteBaseUrl([{ name: 'raro', url: 'raro', default: true }], undefined), null)
+  assert.equal(issueUrl('https://otro.atlassian.net', 'PP-7'), 'https://otro.atlassian.net/browse/PP-7')
+  assert.equal(issueUrl(null, 'PP-7'), null)
+})
+
+test('issue keys are terminal hyperlinks only on a TTY without NO_COLOR or TERM=dumb', () => {
+  const issue = { key: 'PP-7', url: 'https://otro.atlassian.net/browse/PP-7' }
+  assert.equal(hyperlinksSupported({ isTTY: true }, { TERM: 'xterm-256color' }), true)
+  assert.equal(hyperlinksSupported({ isTTY: false }, {}), false)
+  assert.equal(hyperlinksSupported({}, {}), false)
+  assert.equal(hyperlinksSupported({ isTTY: true }, { NO_COLOR: '1' }), false)
+  assert.equal(hyperlinksSupported({ isTTY: true }, { TERM: 'dumb' }), false)
+  assert.equal(issueLabel(issue, true), '\u001b]8;;https://otro.atlassian.net/browse/PP-7\u001b\\PP-7\u001b]8;;\u001b\\')
+  assert.equal(issueLabel(issue, false), 'PP-7')
+  assert.equal(issueLabel({ key: 'PP-7', url: null }, true), 'PP-7')
+})
+
+test('overtime links each issue to the --site URL, and a missing site leaves url null without failing', async (t) => {
+  const { env } = await sandbox(t)
+  await withFakeAtl(env)
+  const other = await tally(['overtime', '--account-id', 'acc-ana', '--site', 'otro', '--month', '2026-10', '--json'], env)
+  assert.equal(other.code, 0, other.stdout + other.stderr)
+  assert.equal(other.json.meta.siteUrl, 'https://otro.atlassian.net')
+  assert.deepEqual(other.json.data.months[0].issues.map((issue: { url: string }) => issue.url), ['https://otro.atlassian.net/browse/INN-1', 'https://otro.atlassian.net/browse/INN-2', 'https://otro.atlassian.net/browse/PP-1'])
+  assert.equal(other.json.data.months[0].withoutEstimate[0].url, 'https://otro.atlassian.net/browse/INN-3')
+
+  const missing = await tally(['overtime', '--account-id', 'acc-ana', '--site', 'nada', '--month', '2026-10', '--json'], env)
+  assert.equal(missing.code, 0, missing.stdout + missing.stderr)
+  assert.equal(missing.json.meta.siteUrl, null)
+  assert.deepEqual(missing.json.meta.warnings, ['atl did not report the URL of site "nada"; issue links are omitted.'])
+  assert.deepEqual(other.json.meta.warnings, [])
+  assert.ok([...missing.json.data.months[0].issues, ...missing.json.data.months[0].withoutEstimate].every((issue: { url: string | null }) => issue.url === null))
+
+  const text = await tally(['overtime', '--account-id', 'acc-ana', '--month', '2026-10'], env)
+  assert.match(text.stdout, /1 issues without estimate \(INN-3\)/)
+  assert.ok(!text.stdout.includes('\u001b'))
+
+  await withFakeAtl(env, { sitesFail: true })
+  const failing = await tally(['overtime', '--account-id', 'acc-ana', '--month', '2026-10', '--json'], env)
+  assert.equal(failing.code, 0, failing.stdout + failing.stderr)
+  assert.equal(failing.json.meta.siteUrl, null)
+  assert.match(failing.stderr, /issue links are omitted/)
+  assert.equal(failing.json.data.months[0].issues[0].url, null)
 })
 
 test('overtime checks its options before reading anything', async (t) => {

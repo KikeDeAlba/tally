@@ -1,6 +1,6 @@
 {
   "name": "@kikedealba/tally",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "description": "Groups bita time entries into Jira-ready work and keeps track of what was already logged.",
   "license": "MIT",
   "author": "Jesus Enrique De Alba Gaytan",
