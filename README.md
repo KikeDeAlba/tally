@@ -88,6 +88,7 @@ tally summary --from 2026-10-01 --to 2026-10-09
 tally groups --pending --json                # alias de summary
 tally status month                           # subido, pendiente, excluido y fuera de Jira por proyecto
 tally status --last-days 30 --project 789 --entries --json
+tally overtime --month 2026-10 --salary-stdin  # horas extra del mes (sueldo por stdin)
 
 tally map list
 tally map set <projectId> <JIRAKEY> --parent <JIRAKEY-123>   # siempre a esa épica
@@ -206,6 +207,57 @@ Opciones: el rango igual que `summary` (preset, `--from`/`--to`,
 `--include-running` (cuenta lo que sigue corriendo en su columna, hasta ahora)
 y `--estimate-step-minutes N` (30 por defecto, como `summary`).
 
+### `overtime`
+
+Horas extra por mes, para ti o para un compañero, con la misma fórmula:
+
+- hora = sueldo ÷ horas del mes (`--monthly-hours`, 160 por defecto);
+- extra = max(0, estimación del mes − horas del mes), mes por mes;
+- pago ×1 = horas extra × hora; pago ×N = pago ×1 × `--multiplier` (2).
+
+El sueldo se da en cada consulta y nunca se guarda ni se escribe en logs:
+`--salary-stdin` lo lee de la entrada estándar (así no aparece en la lista de
+procesos; es lo que usan Den y la skill) o `--salary N`. Sin sueldo salen solo
+las horas y los montos van en `null`. Los meses: `--month YYYY-MM` (por defecto
+el actual) o `--from YYYY-MM [--to YYYY-MM]`.
+
+**Tú** (sin `--user`): la estimación de `status` de cada mes calendario, solo de
+proyectos que van a Jira, sin los que pases con `--exclude <proyecto de bita>`
+(repetible). Acepta `--include-running` y `--timezone`.
+
+**Un compañero** (`--user "<nombre>"` o `--account-id <id>`): se lee de Jira por
+la CLI de atl (`atl api call … --json`, solo lectura), en el sitio de
+`--site` o el de `tally config set-jira --atl-site`:
+
+- La persona se busca por nombre o correo. Si hay varias, falla con
+  `USER_AMBIGUOUS` y `data.candidates[]` (`displayName`, `email` si es visible,
+  `accountId`) para repetir con `--account-id`; si no hay ninguna,
+  `USER_NOT_FOUND`.
+- Cuentan sus issues **asignados** y **terminados** (`statusCategory = Done`),
+  ubicados en el mes por su **fecha de inicio**, sumando la **estimación
+  original**. Los que no tienen estimación van aparte en `withoutEstimate` y no
+  suman.
+- El campo de fecha de inicio ("Fecha de inicio" o "Start date") se busca una
+  vez por sitio y queda en la config de tally cuando el sitio tiene nombre
+  (`--site` o `--atl-site`; con el sitio por defecto de atl se busca en cada
+  consulta); `--start-field customfield_N` lo fuerza.
+- Una lista común de proyectos de Jira que nunca cuentan, para todos los
+  compañeros: `tally overtime exclude add PP`, `exclude rm PP`, `exclude ls`.
+
+Con `--json`: `data.person` (`name`, `accountId`, `source`: `timers` o `jira`),
+`data.rate` (`hourlyRate`, `monthlyHours`, `multiplier`, `currency`),
+`data.months[]` (`month`, `estimateSeconds`, `expectedSeconds`,
+`overtimeSeconds`, `payX1`, `payMultiplied`, `issues[]` y `withoutEstimate[]`
+con `key`, `summary`, `project`, `status`, `startDate`, `estimateSeconds`) y
+`data.totals`. Para un compañero, `meta` trae el sitio, el campo de fecha de
+inicio, los proyectos excluidos y el JQL de cada mes.
+
+```sh
+tally overtime --month 2026-10 --salary-stdin --json < sueldo.txt
+tally overtime --user "Ana" --from 2026-08 --to 2026-10
+tally overtime exclude add PP
+```
+
 ## Eventos de bita
 
 `tally setup` suscribe tally a los eventos `delete` y `merge` de bita (por el
@@ -224,14 +276,14 @@ registro de kit, comando `tally bita-hook`):
 | Qué | Dónde | Variable |
 |---|---|---|
 | Registros (entrada ↔ issue, worklog, fecha) | `~/.local/share/tally/tally.db` (Windows: `%LOCALAPPDATA%\tally\tally.db`) | `TALLY_DB_PATH` |
-| Mapeos, proyectos fuera de Jira, temas y datos de Jira | `~/.config/tally/config.json` (Windows: `%APPDATA%\tally\config.json`) | `TALLY_CONFIG_PATH` |
+| Mapeos, proyectos fuera de Jira, temas, datos de Jira y excluidos de horas extra | `~/.config/tally/config.json` (Windows: `%APPDATA%\tally\config.json`) | `TALLY_CONFIG_PATH` |
 
 `XDG_DATA_HOME` y `XDG_CONFIG_HOME` se respetan.
 
 ## Capacidades
 
 `tally capabilities --json` anuncia `timesheet.summary`, `timesheet.status`,
-`timesheet.map` y `timesheet.link`. Cualquier herramienta puede encontrar tally con kit
+`timesheet.map`, `timesheet.link` y `timesheet.overtime`. Cualquier herramienta puede encontrar tally con kit
 (`findTool('tally', { capability: 'timesheet.summary' })`) y llamarlo con
 `--json`; la pestaña Jira de Den usa `tally summary --pending --json`, la forma completa,
 y la ventana de reportes, `tally status --json`.

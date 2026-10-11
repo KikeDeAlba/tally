@@ -4,6 +4,7 @@ interface State {
   entries: { id: number; projectId: number | null; projectName: string | null; description: string; kind: string | null; start: string; stop: string | null; segments?: { entryId: number }[] }[]
   range: { fromDay: string; toDay: string; timezone: string }
   projects: { id: number; name: string; jira: boolean }[]
+  filterByRange?: boolean
 }
 
 const args = process.argv.slice(2).filter((arg) => arg !== '--json')
@@ -29,7 +30,15 @@ if (head === 'capabilities') {
   if (!entry) fail('entries get', 'ENTRY_NOT_FOUND', `No entry #${id}.`, 3)
   else reply('entries get', { id, description: entry.description, kind: entry.kind, projectId: entry.projectId, projectName: entry.projectName, startedAt: entry.start, stoppedAt: entry.stop, note: null })
 } else if (head === 'entries') {
-  reply('entries', state.entries, { range: state.range, warnings: [] })
+  const from = args.includes('--from') ? args[args.indexOf('--from') + 1] : undefined
+  const to = args.includes('--to') ? args[args.indexOf('--to') + 1] : undefined
+  if (state.filterByRange && from && to) {
+    const inRange = state.entries.filter((entry) => {
+      const day = (entry as { localDay?: string }).localDay ?? entry.start.slice(0, 10)
+      return day >= from && day <= to
+    })
+    reply('entries', inRange, { range: { ...state.range, fromDay: from, toDay: to }, warnings: [] })
+  } else reply('entries', state.entries, { range: state.range, warnings: [] })
 } else if (head === 'projects') {
   reply('projects', state.projects)
 } else {
