@@ -22,8 +22,8 @@ Usage:
                 [--no-notes] [--notes-mode inline|path|both] [--notes-budget-kb N] [--brief]
   tally groups ...                 Same as summary
   tally status [preset] [--from YYYY-MM-DD] [--to YYYY-MM-DD] [--last-days N] [--timezone TZ]
-               [--project <id|key|name>] [--entries] [--include-running] [--json]
-                                   Registered, pending, excluded and outside-Jira time per project
+               [--project <id|key|name>] [--entries] [--include-running] [--estimate-step-minutes N] [--json]
+                                   Registered, pending, excluded and outside-Jira time and estimate per project
   tally map list [--json]
   tally map set <projectId> <JIRAKEY> [--parent KEY-123 | --no-epic] [--issue-type NAME] [--hierarchy H]
   tally map unset <projectId>
