@@ -1,16 +1,9 @@
 ---
 name: tally
 description: >-
-  Lleva a Jira el tiempo medido en bita. Agrupa las entradas en tareas listas
-  para Jira con tally, crea los issues con atl con su jerarquía (Épica →
-  Historia → Subtarea), su estimación, un worklog por cada bloque medido y el
-  cierre, y deja anotado en tally qué entradas ya se registraron. Úsala cuando
-  el usuario quiera ver o reportar en qué trabajó, o volcar ese tiempo a Jira.
-  Frases que la disparan: "registra mis horas de esta semana en Jira", "pasa mi
-  tiempo a Jira", "qué trabajé esta semana", "sube las horas de ayer", "reporta
-  mi tiempo del mes", "registra lo que tengo pendiente", "qué me falta subir a
-  Jira". No la uses para arrancar o parar cronómetros (eso es bita) ni para
-  tareas de Jira que no vengan de un registro de tiempo.
+  Sube a Jira el tiempo medido en bita (issues, estimación y worklogs vía atl).
+  Frases: "registra mis horas en Jira", "sube las horas de ayer", "qué me falta
+  subir a Jira".
 ---
 
 # tally
