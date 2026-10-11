@@ -332,7 +332,7 @@ test('setup registers tally and installs the skill and commands in the agents', 
   const result = await tally(['setup', '--agents', 'codex,gemini', '--json'], env)
   assert.equal(result.code, 0, result.stdout + result.stderr)
   const registered = await readManifest('tally', platformContext({ env, home: dir }))
-  assert.deepEqual(registered?.capabilities, ['timesheet.summary', 'timesheet.status', 'timesheet.map', 'timesheet.link'])
+  assert.deepEqual(registered?.capabilities, ['timesheet.summary', 'timesheet.status', 'timesheet.map', 'timesheet.link', 'timesheet.overtime'])
   assert.deepEqual(registered?.subscribes.map((item) => [item.tool, item.events, item.command.at(-1)]), [['bita', ['delete', 'merge'], 'bita-hook']])
   assert.ok(existsSync(path.join(dir, '.gemini', 'extensions', 'tally', 'skills', 'tally', 'SKILL.md')))
   assert.ok(existsSync(path.join(dir, '.gemini', 'extensions', 'tally', 'commands', 'tally-push.toml')))

@@ -10,13 +10,15 @@ export class TallyError extends Error {
   readonly code: string
   readonly hint: string | undefined
   readonly exitCode: number
+  readonly data: unknown
 
-  constructor(message: string, code: string, options: { hint?: string | undefined; exitCode?: number } = {}) {
+  constructor(message: string, code: string, options: { hint?: string | undefined; exitCode?: number; data?: unknown } = {}) {
     super(message)
     this.name = 'TallyError'
     this.code = code
     this.hint = options.hint
     this.exitCode = options.exitCode ?? EXIT.failure
+    this.data = options.data
   }
 }
 

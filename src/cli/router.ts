@@ -12,6 +12,7 @@ import { runMigrate } from './commands/migrate.ts'
 import { runSetup, runUninstall } from './commands/setup.ts'
 import { runProject } from './commands/project.ts'
 import { runBitaHook } from './commands/hook.ts'
+import { runOvertime } from './commands/overtime.ts'
 
 export const HELP = `tally ${VERSION} — bita time grouped into Jira-ready work, and what was already logged
 
@@ -31,6 +32,14 @@ Usage:
   tally link <entryIds...> --issue KEY [--worklog ID] [--force]
   tally link <entryIds...> --unlink
   tally project jira <id|key|name> [on|off]   Whether a bita project's time goes to Jira
+  tally overtime [--month YYYY-MM | --from YYYY-MM [--to YYYY-MM]] [--salary N | --salary-stdin]
+                 [--monthly-hours 160] [--multiplier 2] [--currency MXN] [--json]
+                 [--exclude <bita project>]... [--include-running]
+                                   Your overtime from your timers (tally estimate per month)
+  tally overtime --user "<name>" | --account-id ID [--site NAME] [--start-field customfield_N] ...
+                                   A coworker's overtime from Jira: Done issues assigned to them,
+                                   by start date, summing the original estimate
+  tally overtime exclude add|rm <KEY>... | ls   Jira projects that never count as overtime
   tally config get [--json]
   tally config set-jira [--site URL] [--atl-site NAME] [--account-id ID] [--cloud-id ID] [--issue-type NAME]
   tally migrate --from-bita [--dry-run]
@@ -49,6 +58,7 @@ function commandName(argv: readonly string[]): string {
   const words = argv.filter((arg) => !arg.startsWith('-'))
   const head = words[0] ?? 'help'
   if (['map', 'config', 'project'].includes(head) && words[1]) return `${head} ${words[1]}`
+  if (head === 'overtime' && words[1] === 'exclude') return words[2] ? `overtime exclude ${words[2]}` : 'overtime exclude'
   return head
 }
 
@@ -86,6 +96,8 @@ async function dispatch(argv: readonly string[]): Promise<number> {
       return runConfig(rest)
     case 'project':
       return runProject(rest)
+    case 'overtime':
+      return runOvertime(rest)
     case 'bita-hook':
       return runBitaHook(rest)
     case 'migrate':
@@ -113,7 +125,8 @@ export async function main(argv: readonly string[]): Promise<number> {
     const code = known ? error.code : 'UNEXPECTED'
     const message = error instanceof Error ? error.message : String(error)
     const hint = known ? error.hint : undefined
-    if (json) writeJson(errorEnvelope(command, { code, message, ...(hint ? { hint } : {}) }))
+    const data = error instanceof TallyError ? error.data : undefined
+    if (json) writeJson(errorEnvelope(command, { code, message, ...(hint ? { hint } : {}) }, data))
     else {
       writeErr(`Error: ${message}`)
       if (hint) writeErr(hint)
