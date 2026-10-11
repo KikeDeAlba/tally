@@ -250,9 +250,13 @@ Con `--json`: `data.person` (`name`, `accountId`, `source`: `timers` o `jira`),
 `data.rate` (`hourlyRate`, `monthlyHours`, `multiplier`, `currency`),
 `data.months[]` (`month`, `estimateSeconds`, `expectedSeconds`,
 `overtimeSeconds`, `payX1`, `payMultiplied`, `issues[]` y `withoutEstimate[]`
-con `key`, `summary`, `project`, `status`, `startDate`, `estimateSeconds`) y
-`data.totals`. Para un compañero, `meta` trae el sitio, el campo de fecha de
-inicio, los proyectos excluidos y el JQL de cada mes.
+con `key`, `summary`, `project`, `status`, `startDate`, `estimateSeconds` y
+`url`) y `data.totals`. Para un compañero, `meta` trae el sitio, `siteUrl`, el
+campo de fecha de inicio, los proyectos excluidos y el JQL de cada mes. `url` es
+`<siteUrl>/browse/<KEY>`, con la URL del sitio que da `atl site ls --json` (el de
+`--site` o el por defecto de atl); si atl no conoce el sitio, `url` y `siteUrl`
+van en `null`. En texto, las claves son enlaces clicables (OSC 8) solo en una
+terminal interactiva, sin `NO_COLOR` ni `TERM=dumb`.
 
 ```sh
 tally overtime --month 2026-10 --salary-stdin --json < sueldo.txt

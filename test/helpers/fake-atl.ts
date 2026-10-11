@@ -16,6 +16,8 @@ interface State {
   fields: Record<string, unknown>[]
   issues: FakeIssue[]
   pageSize?: number
+  sites?: Record<string, unknown>[]
+  sitesFail?: boolean
 }
 
 const args = process.argv.slice(2).filter((arg) => arg !== '--json')
@@ -78,6 +80,9 @@ function search(input: Record<string, unknown>) {
 const [head, sub, operation] = args
 if (head === 'capabilities') {
   reply('capabilities', { name: 'atl', version: '0.3.0', envelope: 1, capabilities: ['atlassian.sites', 'atlassian.api.call', 'jira.issue.read'], emits: [] })
+} else if (head === 'site' && sub === 'ls') {
+  if (state.sitesFail) fail('site ls', 'CONFIG_ERROR', 'No sites configured.', 1)
+  else reply('site ls', state.sites ?? [])
 } else if (head === 'api' && sub === 'call') {
   const input = JSON.parse(args[args.indexOf('--args') + 1] ?? '{}') as Record<string, unknown>
   if (operation === 'jira.findUsers') {
