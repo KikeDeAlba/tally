@@ -1,6 +1,6 @@
 ---
 name: tally-pending
-description: Muestra el tiempo de bita que falta subir a Jira, agrupado en tareas
+description: Muestra el tiempo de bita pendiente de subir a Jira
 argument-hint: "[today|yesterday|week|last-week|month|last-month | --from YYYY-MM-DD --to YYYY-MM-DD]"
 disable-model-invocation: true
 allowed-tools: Bash(tally summary:*)
