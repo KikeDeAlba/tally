@@ -1,4 +1,4 @@
-import { FILTER_OPTIONS, BASE_OPTIONS, RANGE_OPTIONS, parseCommandArgs, readBoolean, readInteger, readRegistrationFilter, readString } from '../args.ts'
+import { FILTER_OPTIONS, BASE_OPTIONS, RANGE_OPTIONS, parseCommandArgs, readBoolean, readEstimateStepSeconds, readInteger, readRegistrationFilter, readString } from '../args.ts'
 import { bitaRangeArgs } from '../range.ts'
 import { renderTable } from '../table.ts'
 import { successEnvelope, writeErr, writeJson, writeOut } from '../output.ts'
@@ -262,8 +262,7 @@ export async function runSummary(argv: readonly string[], command = 'summary'): 
   const maxTaskHours = readInteger(args, 'max-task-hours')
   if (maxTaskHours !== undefined && maxTaskHours < 1) throw new UsageError(`--max-task-hours must be 1 or more, got ${maxTaskHours}.`)
   const maxTaskSeconds = maxTaskHours === undefined ? MAX_TASK_SECONDS : maxTaskHours * 3600
-  const estimateStepMinutes = readInteger(args, 'estimate-step-minutes')
-  if (estimateStepMinutes !== undefined && estimateStepMinutes < 1) throw new UsageError(`--estimate-step-minutes must be 1 or more, got ${estimateStepMinutes}.`)
+  const estimateStepSeconds = readEstimateStepSeconds(args)
   const skipNotes = readBoolean(args, 'no-notes')
   const budgetKb = readInteger(args, 'notes-budget-kb')
   const provider = skipNotes ? null : await findNotesProvider()
@@ -289,7 +288,7 @@ export async function runSummary(argv: readonly string[], command = 'summary'): 
       filter,
       includeRunning: readBoolean(args, 'include-running'),
       maxTaskSeconds,
-      ...(estimateStepMinutes === undefined ? {} : { estimateStepSeconds: estimateStepMinutes * 60 }),
+      ...(estimateStepSeconds === undefined ? {} : { estimateStepSeconds }),
       caseInsensitive: readBoolean(args, 'case-insensitive'),
       now: new Date(),
     },

@@ -81,6 +81,12 @@ export function readInteger(args: ParsedArgs, name: string): number | undefined 
   return parsed
 }
 
+export function readEstimateStepSeconds(args: ParsedArgs): number | undefined {
+  const minutes = readInteger(args, 'estimate-step-minutes')
+  if (minutes !== undefined && minutes < 1) throw new UsageError(`--estimate-step-minutes must be 1 or more, got ${minutes}.`)
+  return minutes === undefined ? undefined : minutes * 60
+}
+
 export function readPreset(args: ParsedArgs): RangePreset | undefined {
   const first = args.positionals[0]
   if (!first) return undefined

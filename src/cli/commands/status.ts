@@ -1,8 +1,11 @@
-import { BASE_OPTIONS, RANGE_OPTIONS, parseCommandArgs, readBoolean, readString } from '../args.ts'
+import { BASE_OPTIONS, RANGE_OPTIONS, parseCommandArgs, readBoolean, readEstimateStepSeconds, readString } from '../args.ts'
 import { bitaRangeArgs } from '../range.ts'
 import { renderTable } from '../table.ts'
 import { successEnvelope, writeErr, writeJson, writeOut } from '../output.ts'
+import { ESTIMATE_STEP_SECONDS } from '../../constants.ts'
 import { formatDuration } from '../../domain/duration.ts'
+import { groupEntries } from '../../domain/group.ts'
+import type { EnrichedTimeEntry } from '../../domain/types.ts'
 import { exclusionReason, type ExclusionReason } from '../../domain/collect.ts'
 import { applyRegistrations, expandSegments } from '../../domain/expand.ts'
 import { findProject, projectNotFound, requireBita, type BitaEntries, type BitaProject } from '../../integrations/bita.ts'
@@ -16,6 +19,7 @@ const STATUS_OPTIONS = {
   project: { type: 'string' as const },
   entries: { type: 'boolean' as const, default: false },
   'include-running': { type: 'boolean' as const, default: false },
+  'estimate-step-minutes': { type: 'string' as const },
 }
 
 export interface StatusTotals {
@@ -25,7 +29,11 @@ export interface StatusTotals {
   nonJiraSeconds: number
 }
 
-export interface StatusProject extends StatusTotals {
+export interface StatusEstimate {
+  estimateSeconds: number
+}
+
+export interface StatusProject extends StatusTotals, StatusEstimate {
   projectId: number | null
   name: string | null
   jira: boolean
@@ -55,6 +63,7 @@ export interface StatusOptions {
   includeRunning: boolean
   withEntries: boolean
   now: Date
+  estimateStepSeconds?: number
 }
 
 function emptyTotals(): StatusTotals {
@@ -76,7 +85,8 @@ export function buildStatus(input: StatusInput, options: StatusOptions) {
   const expanded = applyRegistrations(expandSegments(withJira, timezone), input.registrations)
   const rules = { includeRunning: options.includeRunning, requireDescription: true, requireProject: false }
 
-  const totals = emptyTotals()
+  const totals: StatusTotals & StatusEstimate = { ...emptyTotals(), estimateSeconds: 0 }
+  const countable: EnrichedTimeEntry[] = []
   const byProject = new Map<number | null, StatusProject>()
   const entries: StatusEntry[] = []
   for (const source of expanded) {
@@ -93,15 +103,22 @@ export function buildStatus(input: StatusInput, options: StatusOptions) {
       seconds: source.durationSeconds,
     }
     entries.push(entry)
+    if (exclusionReason(source, rules) === null) countable.push(source)
     const key = bucket(entry)
     totals[key] += entry.seconds
     let project = byProject.get(entry.projectId)
     if (!project) {
-      project = { projectId: entry.projectId, name: source.projectName, jira: false, ...emptyTotals() }
+      project = { projectId: entry.projectId, name: source.projectName, jira: false, ...emptyTotals(), estimateSeconds: 0 }
       byProject.set(entry.projectId, project)
     }
     project.jira ||= entry.jira
     project[key] += entry.seconds
+  }
+
+  const estimateStepSeconds = options.estimateStepSeconds ?? ESTIMATE_STEP_SECONDS
+  for (const group of groupEntries(countable, { timezone, estimateStepSeconds })) {
+    byProject.get(group.projectId)!.estimateSeconds += group.estimateSeconds
+    totals.estimateSeconds += group.estimateSeconds
   }
 
   const total = (item: StatusTotals) => item.registeredSeconds + item.pendingSeconds + item.excludedSeconds + item.nonJiraSeconds
@@ -131,6 +148,7 @@ export function buildStatus(input: StatusInput, options: StatusOptions) {
       entryCount: entries.length,
       runningSeconds,
       includeRunning: options.includeRunning,
+      estimateStepMinutes: estimateStepSeconds / 60,
       warnings,
     },
   }
@@ -147,6 +165,7 @@ export function resolveProjectRef(ref: string, entries: BitaEntries['entries'], 
 
 export async function runStatus(argv: readonly string[]): Promise<number> {
   const args = parseCommandArgs(argv, STATUS_OPTIONS, { ...BASE_OPTIONS, ...RANGE_OPTIONS })
+  const estimateStepSeconds = readEstimateStepSeconds(args)
   const config = await readConfig()
   const range = bitaRangeArgs(args, new Date(), typeof config.timezone === 'string' ? config.timezone : undefined)
   const bita = await requireBita()
@@ -167,7 +186,7 @@ export async function runStatus(argv: readonly string[]): Promise<number> {
 
   const status = buildStatus(
     { bita: fetched, registrations, hasRegistrations, config, rangeWarnings: range.warnings, ...(projectId === undefined ? {} : { projectId }) },
-    { includeRunning: readBoolean(args, 'include-running'), withEntries: readBoolean(args, 'entries'), now: new Date() },
+    { includeRunning: readBoolean(args, 'include-running'), withEntries: readBoolean(args, 'entries'), now: new Date(), ...(estimateStepSeconds === undefined ? {} : { estimateStepSeconds }) },
   )
 
   const { data, meta } = status
@@ -187,6 +206,7 @@ export async function runStatus(argv: readonly string[]): Promise<number> {
         { header: 'PENDING', align: 'right' },
         { header: 'EXCLUDED', align: 'right' },
         { header: 'OUTSIDE JIRA', align: 'right' },
+        { header: 'ESTIMATE', align: 'right' },
       ],
       data.projects.map((project) => [
         project.name ?? '(no project)',
@@ -195,12 +215,13 @@ export async function runStatus(argv: readonly string[]): Promise<number> {
         human(project.pendingSeconds),
         human(project.excludedSeconds),
         human(project.nonJiraSeconds),
+        human(project.estimateSeconds),
       ]),
     ),
   )
   writeOut('')
   writeOut(
-    `${meta.range.fromDay} .. ${meta.range.toDay}: ${formatDuration(data.totals.registeredSeconds)} registered, ${formatDuration(data.totals.pendingSeconds)} pending, ${formatDuration(data.totals.excludedSeconds)} excluded, ${formatDuration(data.totals.nonJiraSeconds)} outside Jira.`,
+    `${meta.range.fromDay} .. ${meta.range.toDay}: ${formatDuration(data.totals.registeredSeconds)} registered, ${formatDuration(data.totals.pendingSeconds)} pending, ${formatDuration(data.totals.excludedSeconds)} excluded, ${formatDuration(data.totals.nonJiraSeconds)} outside Jira, ${formatDuration(data.totals.estimateSeconds)} estimated.`,
   )
   if (data.entries) {
     writeOut('')

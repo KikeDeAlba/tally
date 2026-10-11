@@ -183,17 +183,28 @@ proyectos fuera de Jira. Cada segundo cae en una sola columna:
 - `nonJiraSeconds`: lo no registrado de proyectos fuera de Jira (`tally
   project jira … off`).
 
-Con `--json`, `data.projects[]` (`projectId`, `name`, `jira` y las cuatro
-columnas, de mayor a menor), `data.totals` con las mismas cuatro, y con
+Aparte de las cuatro columnas va `estimateSeconds`: la estimación que `summary`
+daría a lo registrado y pendiente del rango, sin lo que `summary` excluye
+(tampoco lo registrado). Agrupa igual, por proyecto y título con las opciones
+por defecto (tope de 8 horas, sin `--case-insensitive`), redondea cada grupo
+hacia arriba al paso de estimación y vale 0 en los proyectos fuera de Jira.
+Como cada grupo se redondea dentro del rango pedido, el de un mes no es la suma
+de sus semanas. Es la cifra que usa Den para las horas
+extra.
+
+Con `--json`, `data.projects[]` (`projectId`, `name`, `jira`, las cuatro
+columnas y `estimateSeconds`, de mayor a menor), `data.totals` con las mismas
+cinco, y con
 `--entries` también `data.entries[]` (`entryId`, `registered`, `issueKey`,
 `jira`, `excludedReason`, `projectId`, `localDay`, `seconds`). `meta` trae
 `range`, `projectId`, `entryCount`, `runningSeconds` (lo que sigue corriendo),
-`includeRunning` y `warnings` (corriendo, solapes, conflictos de merge y la
+`includeRunning`, `estimateStepMinutes` y `warnings` (corriendo, solapes, conflictos de merge y la
 migración pendiente, como `summary`).
 
 Opciones: el rango igual que `summary` (preset, `--from`/`--to`,
-`--last-days`, `--timezone`), `--project <id|clave|nombre>`, `--entries` e
-`--include-running` (cuenta lo que sigue corriendo en su columna, hasta ahora).
+`--last-days`, `--timezone`), `--project <id|clave|nombre>`, `--entries`,
+`--include-running` (cuenta lo que sigue corriendo en su columna, hasta ahora)
+y `--estimate-step-minutes N` (30 por defecto, como `summary`).
 
 ## Eventos de bita
 
