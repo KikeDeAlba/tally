@@ -23,7 +23,7 @@ invertidas: `cat > /tmp/tally-desc.md <<'MD'` … `MD`.
 | Comentario | `atl jira comment add <KEY> --body @resultado.md --json` |
 | Transiciones | `atl jira issue transitions <KEY> --json` |
 | Transicionar | `atl jira issue transition <KEY> <id> --json` |
-| JQL | `atl jira search "<JQL>" [--limit n] --json` |
+| JQL | `atl jira search "<JQL>" --fields <campos> [--limit n] --json` (sin `--fields` trae solo key, summary, status y assignee; pide exactamente lo que hace falta) |
 | Adjuntar | `atl jira attach <KEY> <archivo> --json` |
 
 ## La forma de `tally summary --pending --brief --json`
@@ -112,7 +112,8 @@ Historia no puede contener Tareas, solo Subtareas.
 | `flat-task` | Tarea suelta (solo si el usuario lo pidió) |
 
 **Épica, solo con `per-run`.** Una vez por tablero:
-`project = <KEY> AND issuetype = Epic AND statusCategory != Done ORDER BY updated DESC`.
+`project = <KEY> AND issuetype = Epic AND statusCategory != Done ORDER BY updated DESC`
+(con la forma compacta basta: key y summary).
 Elige por grupo con página, título, repo y rama (la épica es el frente de
 trabajo, no el tipo). Si ninguna encaja, Historia suelta; si hace falta un
 frente nuevo, propón la épica por nombre. Enseña la épica elegida en la
@@ -129,7 +130,8 @@ encaja ninguno, pregunta; no inventes temas.
 **Historia.** Si `jiraStories[tema]` (o, en `per-run`,
 `jiraStoriesByEpic[<épica elegida>][tema]`) ya tiene key, úsala. Si no, busca y empata por igualdad exacta normalizada (sin
 acentos, espacios ni mayúsculas), nunca con `summary ~`:
-`project = <KEY> AND issuetype = Historia AND parent = <épica> ORDER BY created DESC`.
+`project = <KEY> AND issuetype = Historia AND parent = <épica> ORDER BY created DESC`,
+con `--fields summary,parent,issuetype`.
 Sin épica, añade `AND parent IS EMPTY AND reporter = currentUser()`. Si no hay
 empate, propón crearla; al crearla (sin asignar, sin estimación), persístela de
 inmediato con `tally map story <projectId> <tema> <KEY>` (con `per-run`,
@@ -142,7 +144,8 @@ inmediato con `tally map story <projectId> <tema> <KEY>` (con `per-run`,
 `timetracking` está en la pantalla y qué campos son obligatorios.
 
 Aviso de duplicados antes de crear (avisa, no decide):
-`project = X AND summary ~ "..." AND reporter = currentUser() AND created >= -30d`.
+`project = X AND summary ~ "..." AND reporter = currentUser() AND created >= -30d`,
+con `--fields summary,parent,created --limit 10`.
 
 ## 6. Propuesta y confirmación
 
