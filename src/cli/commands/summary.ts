@@ -25,6 +25,7 @@ const SUMMARY_OPTIONS = {
   'no-notes': { type: 'boolean' as const, default: false },
   'notes-mode': { type: 'string' as const },
   'notes-budget-kb': { type: 'string' as const },
+  brief: { type: 'boolean' as const, default: false },
 }
 
 export interface SummaryOptions {
@@ -172,6 +173,73 @@ export async function buildSummary(input: SummaryInput, options: SummaryOptions)
   }
 }
 
+type Summary = Awaited<ReturnType<typeof buildSummary>>
+type SummaryGroup = Summary['data']['groups'][number]
+
+function briefProject(group: SummaryGroup) {
+  return {
+    projectName: group.projectName,
+    jiraProjectKey: group.jiraProjectKey,
+    jiraSite: group.jiraSite,
+    epicMode: group.epicMode,
+    hierarchy: group.hierarchy,
+    jiraEpicKey: group.jiraEpicKey,
+    epicResolved: group.epicResolved,
+    ...(group.epicMode === 'per-run' ? { jiraStoriesByEpic: group.jiraStoriesByEpic } : { jiraStories: group.jiraStories }),
+    jiraStoryIssueTypeName: group.jiraStoryIssueTypeName,
+    jiraWorkIssueTypeName: group.jiraWorkIssueTypeName,
+    jiraIssueTypeName: group.jiraIssueTypeName,
+  }
+}
+
+function briefGroup(group: SummaryGroup) {
+  return {
+    summary: group.summary,
+    projectId: group.projectId,
+    jira: group.jira,
+    kind: group.kind,
+    totalHuman: group.totalHuman,
+    estimateHuman: group.estimateHuman,
+    days: group.days,
+    entryIds: group.entryIds,
+    worklogs: group.worklogs.map((worklog) => ({ entryId: worklog.entryId, startedJira: worklog.startedJira, startLocal: worklog.startLocal, timeSpent: worklog.timeSpent })),
+    ...(group.partCount > 1 ? { part: { index: group.partIndex, count: group.partCount } } : {}),
+    ...(group.meetings && group.meetings.length > 0 ? { meetings: group.meetings } : {}),
+    docs: group.docs.map((doc) => ({ entryId: doc.entryId, path: doc.path, sections: doc.sections, markdown: doc.markdown, ...(doc.truncated ? { truncated: true } : {}), ...(doc.missing ? { missing: true } : {}) })),
+    pages: group.pages.map((page) => ({ pageId: page.pageId, title: page.title, issues: page.issues })),
+  }
+}
+
+export function briefSummary(summary: Summary) {
+  const { data, meta } = summary
+  const projects: Record<string, ReturnType<typeof briefProject>> = {}
+  for (const group of data.groups) {
+    if (group.projectId !== null && group.jira) projects[String(group.projectId)] ??= briefProject(group)
+  }
+  return {
+    data: {
+      totalHuman: data.totalHuman,
+      jiraHuman: data.jiraHuman,
+      nonJiraHuman: data.nonJiraHuman,
+      groups: data.groups.map(briefGroup),
+      projects,
+    },
+    meta: {
+      range: meta.range,
+      groupCount: meta.groupCount,
+      entryCount: meta.entryCount,
+      excluded: meta.excluded.map((entry) => ({ id: entry.id, description: entry.description, projectName: entry.projectName, localDay: entry.localDay, durationHuman: entry.durationHuman, reason: entry.reason })),
+      alreadyRegistered: meta.alreadyRegistered.count,
+      overlaps: meta.overlaps,
+      unmappedProjects: meta.unmappedProjects,
+      nonJira: { totalHuman: meta.nonJira.totalHuman, projects: meta.nonJira.projects.map((project) => ({ id: project.id, name: project.name, totalHuman: project.totalHuman })) },
+      conflicts: meta.conflicts,
+      notes: { provider: meta.notes.provider, missing: meta.notes.missing, truncatedEntryIds: meta.notes.truncatedEntryIds },
+      warnings: meta.warnings,
+    },
+  }
+}
+
 export async function runSummary(argv: readonly string[], command = 'summary'): Promise<number> {
   const args = parseCommandArgs(argv, SUMMARY_OPTIONS, { ...BASE_OPTIONS, ...RANGE_OPTIONS, ...FILTER_OPTIONS })
   const config = await readConfig()
@@ -229,7 +297,12 @@ export async function runSummary(argv: readonly string[], command = 'summary'): 
 
   const { data, meta } = summary
   if (readBoolean(args, 'json')) {
-    writeJson(successEnvelope(command, data, meta))
+    if (readBoolean(args, 'brief')) {
+      const brief = briefSummary(summary)
+      writeJson(successEnvelope(command, brief.data, brief.meta))
+    } else {
+      writeJson(successEnvelope(command, data, meta))
+    }
     for (const warning of meta.warnings) writeErr(`Warning: ${warning}`)
     return 0
   }
