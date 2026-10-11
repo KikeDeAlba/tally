@@ -221,3 +221,44 @@ export async function setStory(projectId: number, themeId: string, story: StoryR
   await writeConfig(config, file)
   return config
 }
+
+export interface StartFieldRef {
+  id: string
+  name: string
+  resolvedAt: string
+}
+
+export interface OvertimeConfig {
+  excludedProjects?: string[]
+  startFields?: Record<string, StartFieldRef>
+}
+
+export function overtimeConfig(config: TallyConfig): OvertimeConfig {
+  const raw = config['overtime']
+  return raw !== null && typeof raw === 'object' && !Array.isArray(raw) ? (raw as OvertimeConfig) : {}
+}
+
+export function excludedJiraProjects(config: TallyConfig): string[] {
+  const list = overtimeConfig(config).excludedProjects
+  return Array.isArray(list) ? list.filter((key): key is string => typeof key === 'string') : []
+}
+
+export async function updateExcludedJiraProjects(change: (current: string[]) => string[], file: string = defaultConfigPath()): Promise<string[]> {
+  const config = await readConfig(file)
+  const next = [...new Set(change(excludedJiraProjects(config)))].sort()
+  config['overtime'] = { ...overtimeConfig(config), excludedProjects: next }
+  await writeConfig(config, file)
+  return next
+}
+
+export function cachedStartField(config: TallyConfig, siteKey: string): StartFieldRef | null {
+  const ref = overtimeConfig(config).startFields?.[siteKey]
+  return ref && typeof ref.id === 'string' && typeof ref.name === 'string' ? ref : null
+}
+
+export async function cacheStartField(siteKey: string, ref: StartFieldRef, file: string = defaultConfigPath()): Promise<void> {
+  const config = await readConfig(file)
+  const current = overtimeConfig(config)
+  config['overtime'] = { ...current, startFields: { ...current.startFields, [siteKey]: ref } }
+  await writeConfig(config, file)
+}

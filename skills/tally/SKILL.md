@@ -19,6 +19,13 @@ medidas: nada de estimar desde commits.
   (o con rango; la tabla basta) y resume. No se escribe nada.
 - **Balance por proyecto** («cuánto llevo subido este mes», «cuánto estimado
   llevo»): `tally status month` (trae `estimateSeconds` por proyecto).
+- **Horas extra** («¿cuántas horas extra le tocan a Ana en octubre? gana
+  40,000», «mis horas extra del mes»): `tally overtime [--user "Ana"]
+  [--month 2026-10] --salary-stdin --json <<< 40000`: el sueldo va solo por la
+  entrada estándar (sin `|`), nunca en `--salary` ni repetido fuera del
+  resultado; sin sueldo, sin `--salary-stdin` (solo horas). `USER_AMBIGUOUS`: enseña
+  `data.candidates` y repite con `--account-id`. Proyectos que no cuentan:
+  `tally overtime exclude add <CLAVE>`.
 - **Volcado** («sube mis horas a Jira»): el procedimiento completo de
   [procedure.md](procedure.md). Si está el subagente `tally-push`, delega en
   él en dos llamadas: «modo plan» (devuelve propuesta y decisiones) y, tras
