@@ -1,6 +1,6 @@
 ---
 name: tally-push
-description: Ejecuta el volcado del tiempo pendiente de bita a Jira con tally y la CLI de atl, en su propia ventana, y devuelve solo la tabla de lo creado y lo que falló. Úsalo desde /tally-push, primero en modo plan y después en modo escribir con la propuesta aprobada.
+description: Ejecuta /tally-push (plan o escribir) y devuelve solo la tabla de creados y fallos.
 tools: Bash, Read
 model: sonnet
 ---
