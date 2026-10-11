@@ -74,10 +74,10 @@ test('status --entries tells why each entry lands where it does', () => {
       { entryId: 3, registered: false, issueKey: null, jira: true, excludedReason: 'no-description' },
       { entryId: 4, registered: false, issueKey: null, jira: true, excludedReason: 'zero-duration' },
       { entryId: 5, registered: false, issueKey: null, jira: true, excludedReason: 'running' },
-      { entryId: 6, registered: false, issueKey: null, jira: false, excludedReason: null },
+      { entryId: 6, registered: true, issueKey: 'CDP-1', jira: false, excludedReason: null },
     ],
   )
-  assert.equal(result.data.totals.nonJiraSeconds, 2400)
+  assert.equal(result.data.totals.nonJiraSeconds, 0)
 })
 
 test('status counts a running entry as pending with includeRunning', () => {
@@ -104,6 +104,21 @@ test('status follows the project the bita entry says goes outside Jira unless ta
   assert.equal(status(entries).data.totals.nonJiraSeconds, 3600)
   const config = { ...emptyConfig(), projectJira: { '900': true } }
   assert.equal(status(entries, { config }).data.totals.pendingSeconds, 3600)
+})
+
+test('time already registered stays registered after its project is switched off Jira', () => {
+  const entries = [
+    bitaEntry({ id: 1, projectId: 900, projectName: 'Can Doo with Pet', durationSeconds: 3600 }),
+    bitaEntry({ id: 2, projectId: 900, projectName: 'Can Doo with Pet', start: '2026-09-17T16:00:00Z', durationSeconds: 1800 }),
+  ]
+  const config = { ...emptyConfig(), projectJira: { '900': false } }
+  const result = status(entries, { registrations: [registration(1, 'CDP-1')], config, options: { withEntries: true } })
+  assert.deepEqual(result.data.totals, { registeredSeconds: 3600, pendingSeconds: 0, excludedSeconds: 0, nonJiraSeconds: 1800 })
+  assert.deepEqual(result.data.projects, [{ projectId: 900, name: 'Can Doo with Pet', jira: false, registeredSeconds: 3600, pendingSeconds: 0, excludedSeconds: 0, nonJiraSeconds: 1800 }])
+  assert.deepEqual(result.data.entries?.map((entry) => [entry.entryId, entry.registered, entry.issueKey, entry.jira]), [
+    [1, true, 'CDP-1', false],
+    [2, false, null, false],
+  ])
 })
 
 test('status --project keeps a single project', () => {

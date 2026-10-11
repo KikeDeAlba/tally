@@ -62,9 +62,9 @@ function emptyTotals(): StatusTotals {
 }
 
 function bucket(entry: StatusEntry): keyof StatusTotals {
+  if (entry.registered) return 'registeredSeconds'
   if (entry.excludedReason !== null) return 'excludedSeconds'
   if (!entry.jira) return 'nonJiraSeconds'
-  if (entry.registered) return 'registeredSeconds'
   return 'pendingSeconds'
 }
 
@@ -80,7 +80,7 @@ export function buildStatus(input: StatusInput, options: StatusOptions) {
   const byProject = new Map<number | null, StatusProject>()
   const entries: StatusEntry[] = []
   for (const source of expanded) {
-    const registered = source.jira && source.registered
+    const registered = source.registered
     const reason = registered ? null : exclusionReason(source, source.jira ? rules : { ...rules, requireDescription: false })
     const entry: StatusEntry = {
       entryId: source.id,

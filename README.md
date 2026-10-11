@@ -174,12 +174,14 @@ Toma las entradas de bita, separa los bloques de las unificadas como `summary`
 (cada uno con su día y su duración) y cruza los registros de tally y los
 proyectos fuera de Jira. Cada segundo cae en una sola columna:
 
-- `registeredSeconds`: atado a un issue con `tally link`.
+- `registeredSeconds`: atado a un issue con `tally link`, aunque después el
+  proyecto haya salido de Jira.
 - `pendingSeconds`: lo que `summary --pending` propondría subir.
 - `excludedSeconds`: lo que `summary` excluye (corriendo, título de menos de 3
   letras, menos de un minuto). Un cronómetro que sigue corriendo cae aquí,
   también fuera de Jira, salvo con `--include-running`.
-- `nonJiraSeconds`: proyectos fuera de Jira (`tally project jira … off`).
+- `nonJiraSeconds`: lo no registrado de proyectos fuera de Jira (`tally
+  project jira … off`).
 
 Con `--json`, `data.projects[]` (`projectId`, `name`, `jira` y las cuatro
 columnas, de mayor a menor), `data.totals` con las mismas cuatro, y con
