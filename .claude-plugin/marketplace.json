@@ -10,7 +10,7 @@
       "name": "tally",
       "description": "Report pending bita time and push it to Jira through atl, with a subagent that keeps the Jira traffic out of the main conversation",
       "source": "./",
-      "version": "0.2.1",
+      "version": "0.3.0",
       "category": "productivity",
       "tags": ["jira", "timesheet", "worklog", "bita"]
     }

@@ -4,6 +4,7 @@ import { CAPABILITIES } from '../setup.ts'
 import { VERSION } from '../version.ts'
 import { errorEnvelope, successEnvelope, writeErr, writeJson, writeOut } from './output.ts'
 import { runSummary } from './commands/summary.ts'
+import { runStatus } from './commands/status.ts'
 import { runMap } from './commands/map.ts'
 import { runLink } from './commands/link.ts'
 import { runConfig } from './commands/config.ts'
@@ -20,6 +21,9 @@ Usage:
                 [--case-insensitive] [--max-task-hours N] [--estimate-step-minutes N]
                 [--no-notes] [--notes-mode inline|path|both] [--notes-budget-kb N] [--brief]
   tally groups ...                 Same as summary
+  tally status [preset] [--from YYYY-MM-DD] [--to YYYY-MM-DD] [--last-days N] [--timezone TZ]
+               [--project <id|key|name>] [--entries] [--include-running] [--json]
+                                   Registered, pending, excluded and outside-Jira time per project
   tally map list [--json]
   tally map set <projectId> <JIRAKEY> [--parent KEY-123 | --no-epic] [--issue-type NAME] [--hierarchy H]
   tally map unset <projectId>
@@ -72,6 +76,8 @@ async function dispatch(argv: readonly string[]): Promise<number> {
       return runSummary(rest, 'summary')
     case 'groups':
       return runSummary(rest, 'groups')
+    case 'status':
+      return runStatus(rest)
     case 'map':
       return runMap(rest)
     case 'link':
