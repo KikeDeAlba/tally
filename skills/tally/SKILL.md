@@ -1,9 +1,9 @@
 ---
 name: tally
 description: >-
-  Sube a Jira el tiempo medido en bita (issues, estimación y worklogs vía atl).
-  Frases: "registra mis horas en Jira", "sube las horas de ayer", "qué me falta
-  subir a Jira".
+  Tiempo en Jira con tally: sube lo medido en bita y calcula horas extra y su
+  pago, tuyas o de un compañero por su nombre. Frases: "sube mis horas a Jira",
+  "¿cuántas horas extra le tocan a Ana en septiembre?".
 ---
 
 # tally
