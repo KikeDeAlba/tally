@@ -33,6 +33,16 @@ function toExcluded(entry: EnrichedTimeEntry, reason: string): ExcludedEntry {
   }
 }
 
+export type ExclusionReason = 'running' | 'no-project' | 'no-description' | 'zero-duration'
+
+export function exclusionReason(entry: EnrichedTimeEntry, options: Pick<CollectOptions, 'includeRunning' | 'requireDescription' | 'requireProject'>): ExclusionReason | null {
+  if (entry.running && !options.includeRunning) return 'running'
+  if (options.requireProject && entry.projectId === null) return 'no-project'
+  if (options.requireDescription && entry.description.length < 3) return 'no-description'
+  if (options.requireDescription && Math.round(entry.durationSeconds / 60) === 0) return 'zero-duration'
+  return null
+}
+
 export function collectEntries(inRange: readonly EnrichedTimeEntry[], options: CollectOptions): CollectResult {
   const { filter } = options
   const warnings: string[] = []
@@ -53,20 +63,9 @@ export function collectEntries(inRange: readonly EnrichedTimeEntry[], options: C
       if (!entry.running || options.includeRunning) nonJira.push(entry)
       continue
     }
-    if (entry.running && !options.includeRunning) {
-      excluded.push(toExcluded(entry, 'running'))
-      continue
-    }
-    if (options.requireProject && entry.projectId === null) {
-      excluded.push(toExcluded(entry, 'no-project'))
-      continue
-    }
-    if (options.requireDescription && entry.description.length < 3) {
-      excluded.push(toExcluded(entry, 'no-description'))
-      continue
-    }
-    if (options.requireDescription && Math.round(entry.durationSeconds / 60) === 0) {
-      excluded.push(toExcluded(entry, 'zero-duration'))
+    const reason = exclusionReason(entry, options)
+    if (reason !== null) {
+      excluded.push(toExcluded(entry, reason))
       continue
     }
     selected.push(entry)

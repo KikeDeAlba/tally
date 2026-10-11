@@ -175,6 +175,19 @@ export class CliBita implements BitaClient {
   }
 }
 
+export function findProject(projects: readonly BitaProject[], ref: string): BitaProject | undefined {
+  const wanted = ref.toLowerCase()
+  return (
+    projects.find((candidate) => String(candidate.id) === ref) ??
+    projects.find((candidate) => candidate.key !== null && candidate.key.toLowerCase() === wanted) ??
+    projects.find((candidate) => candidate.name.toLowerCase() === wanted)
+  )
+}
+
+export function projectNotFound(ref: string): NotFoundError {
+  return new NotFoundError(`No bita project matches "${ref}".`, 'PROJECT_NOT_FOUND', 'Run "bita projects" to list them.')
+}
+
 let override: BitaClient | undefined
 
 export function setBitaClient(client: BitaClient | undefined): void {

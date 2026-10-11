@@ -161,6 +161,42 @@ test('summary --brief gives the compact envelope the skill and the subagent read
   assert.match(table.stdout, /ajustar pipeline/)
 })
 
+test('status reports registered, pending and outside-Jira time per project from the fake bita', async (t) => {
+  const { env } = await sandbox(t)
+  await withFakeBita(env)
+  assert.equal((await tally(['project', 'jira', '900', 'off', '--json'], env)).code, 0)
+  const linked = await tally(['link', '2', '--issue', 'PP-2', '--json'], env)
+  assert.equal(linked.code, 0, linked.stdout + linked.stderr)
+
+  const result = await tally(['status', '--last-days', '30', '--entries', '--json'], env)
+  assert.equal(result.code, 0, result.stdout + result.stderr)
+  assert.deepEqual(result.json.data.totals, { registeredSeconds: 2700, pendingSeconds: 5400, excludedSeconds: 0, nonJiraSeconds: 1800 })
+  assert.deepEqual(result.json.data.projects.map((project: { projectId: number; jira: boolean }) => [project.projectId, project.jira]), [[789, true], [900, false]])
+  assert.deepEqual(result.json.data.entries.map((entry: { entryId: number; registered: boolean; issueKey: string | null }) => [entry.entryId, entry.registered, entry.issueKey]), [
+    [1, false, null],
+    [4, false, null],
+    [2, true, 'PP-2'],
+    [3, false, null],
+  ])
+  const calls = (await readFile(env['FAKE_BITA_LOG'] as string, 'utf8')).trim().split('\n').map((line) => JSON.parse(line) as string[])
+  assert.equal(calls.filter((call) => call[0] === 'entries' && call[1] === '--from').length, 1)
+
+  const byName = await tally(['status', '--project', 'can doo with pet', '--json'], env)
+  assert.deepEqual(byName.json.data.totals, { registeredSeconds: 0, pendingSeconds: 0, excludedSeconds: 0, nonJiraSeconds: 1800 })
+  assert.equal(byName.json.data.entries, undefined)
+
+  const byId = await tally(['status', '--project', '789', '--json'], env)
+  assert.deepEqual(byId.json.data.totals, { registeredSeconds: 2700, pendingSeconds: 5400, excludedSeconds: 0, nonJiraSeconds: 0 })
+
+  const missing = await tally(['status', '--project', 'nope', '--json'], env)
+  assert.equal(missing.code, 3)
+  assert.equal(missing.json.error?.code, 'PROJECT_NOT_FOUND')
+
+  const table = await tally(['status', 'week'], env)
+  assert.equal(table.code, 0, table.stderr)
+  assert.match(table.stdout, /Plataforma/)
+})
+
 test('link marks entries registered, refuses projects outside Jira, and unlink brings them back', async (t) => {
   const { env } = await sandbox(t)
   await withFakeBita(env, { legacy: true })
@@ -284,7 +320,7 @@ test('setup registers tally and installs the skill and commands in the agents', 
   const result = await tally(['setup', '--agents', 'codex,gemini', '--json'], env)
   assert.equal(result.code, 0, result.stdout + result.stderr)
   const registered = await readManifest('tally', platformContext({ env, home: dir }))
-  assert.deepEqual(registered?.capabilities, ['timesheet.summary', 'timesheet.map', 'timesheet.link'])
+  assert.deepEqual(registered?.capabilities, ['timesheet.summary', 'timesheet.status', 'timesheet.map', 'timesheet.link'])
   assert.deepEqual(registered?.subscribes.map((item) => [item.tool, item.events, item.command.at(-1)]), [['bita', ['delete', 'merge'], 'bita-hook']])
   assert.ok(existsSync(path.join(dir, '.gemini', 'extensions', 'tally', 'skills', 'tally', 'SKILL.md')))
   assert.ok(existsSync(path.join(dir, '.gemini', 'extensions', 'tally', 'commands', 'tally-push.toml')))
