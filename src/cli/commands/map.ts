@@ -6,6 +6,7 @@ import {
   projectGoesToJira,
   NO_EPIC,
   readConfig,
+  setAutoIssue,
   setBoard,
   setProjectMapping,
   setStory,
@@ -310,5 +311,36 @@ export async function runMap(argv: readonly string[]): Promise<number> {
     return 0
   }
 
-  throw new UsageError(`Unknown map subcommand "${subcommand}". Use list, set, unset, story or board.`)
+  if (subcommand === 'auto') {
+    const [rawProjectId, rawState] = args.positionals
+    if (!rawProjectId || (rawState !== 'on' && rawState !== 'off')) throw new UsageError('Usage: tally map auto <projectId> on|off')
+
+    const projectId = Number(rawProjectId)
+    if (!Number.isInteger(projectId)) {
+      throw new UsageError(`Invalid project id: "${rawProjectId}".`)
+    }
+
+    const mapping = (await readConfig()).projectMapping[String(projectId)]
+    if (!mapping) {
+      throw new UsageError(
+        `Project ${projectId} is not mapped to a Jira project. Run "tally map set ${projectId} <JIRAKEY>" first.`,
+      )
+    }
+
+    const autoIssue = rawState === 'on'
+    await setAutoIssue(projectId, autoIssue)
+
+    if (readBoolean(args, 'json')) {
+      writeJson(successEnvelope('map auto', { projectId, jiraProjectKey: mapping.jiraProjectKey, autoIssue }))
+    } else {
+      writeOut(
+        autoIssue
+          ? `Every timer of project ${projectId} now opens its card in ${mapping.jiraProjectKey}.`
+          : `Timers of project ${projectId} open a card only when started with --jira.`,
+      )
+    }
+    return 0
+  }
+
+  throw new UsageError(`Unknown map subcommand "${subcommand}". Use list, set, unset, story, board or auto.`)
 }

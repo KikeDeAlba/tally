@@ -1,5 +1,9 @@
 import type { DatabaseSync } from 'node:sqlite'
 
+export const TIMER_SOURCE = 'timer'
+
+export type FilledBy = 'agent' | 'auto'
+
 export interface Registration {
   entryId: number
   issueKey: string | null
@@ -7,6 +11,7 @@ export interface Registration {
   linkedAt: string
   source: string
   orphanedAt: string | null
+  filledBy: FilledBy | null
 }
 
 interface RawRegistration {
@@ -16,6 +21,7 @@ interface RawRegistration {
   linked_at: string
   source: string
   orphaned_at: string | null
+  filled_by?: string | null
 }
 
 function toRegistration(raw: RawRegistration): Registration {
@@ -26,7 +32,12 @@ function toRegistration(raw: RawRegistration): Registration {
     linkedAt: raw.linked_at,
     source: raw.source,
     orphanedAt: raw.orphaned_at ?? null,
+    filledBy: raw.filled_by === 'agent' || raw.filled_by === 'auto' ? raw.filled_by : null,
   }
+}
+
+export function countsAsRegistered(registration: Registration | undefined): boolean {
+  return registration !== undefined && !(registration.source === TIMER_SOURCE && registration.worklogId === null)
 }
 
 export interface NewRegistration {
@@ -46,7 +57,8 @@ export function register(db: DatabaseSync, link: NewRegistration): void {
        worklog_id = excluded.worklog_id,
        linked_at = excluded.linked_at,
        source = excluded.source,
-       orphaned_at = NULL`,
+       orphaned_at = NULL,
+       filled_by = CASE WHEN excluded.source = 'timer' THEN NULL ELSE registrations.filled_by END`,
   ).run(link.entryId, link.issueKey, link.worklogId ?? null, link.linkedAt, link.source ?? 'tally')
 }
 
@@ -128,4 +140,61 @@ export function readSetting(db: DatabaseSync, key: string): string | undefined {
 
 export function writeSetting(db: DatabaseSync, key: string, value: string): void {
   db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value').run(key, value)
+}
+
+export function markFilled(db: DatabaseSync, entryId: number, by: FilledBy): boolean {
+  const guard = by === 'auto' ? " AND (filled_by IS NULL OR filled_by = 'auto')" : ''
+  return Number(db.prepare(`UPDATE registrations SET filled_by = ? WHERE entry_id = ? AND orphaned_at IS NULL${guard}`).run(by, entryId).changes) > 0
+}
+
+export interface ProjectUse {
+  jiraProjectKey: string
+  lastUsedAt: string
+}
+
+export function recentJiraProjects(db: DatabaseSync): ProjectUse[] {
+  const rows = db.prepare('SELECT issue_key, MAX(linked_at) AS last_used FROM registrations WHERE issue_key IS NOT NULL GROUP BY issue_key').all() as { issue_key: string; last_used: string }[]
+  const latest = new Map<string, string>()
+  for (const row of rows) {
+    const key = row.issue_key.slice(0, row.issue_key.lastIndexOf('-'))
+    if (!key) continue
+    const seen = latest.get(key)
+    if (seen === undefined || row.last_used > seen) latest.set(key, row.last_used)
+  }
+  return [...latest.entries()].map(([jiraProjectKey, lastUsedAt]) => ({ jiraProjectKey, lastUsedAt })).sort((a, b) => b.lastUsedAt.localeCompare(a.lastUsedAt))
+}
+
+export const CLAIM_STALE_MS = 2 * 60 * 1000
+
+export function claimEntry(db: DatabaseSync, entryId: number, now: Date): boolean {
+  db.prepare('DELETE FROM issue_claims WHERE entry_id = ? AND claimed_at < ?').run(entryId, new Date(now.getTime() - CLAIM_STALE_MS).toISOString())
+  return Number(db.prepare('INSERT INTO issue_claims (entry_id, claimed_at) VALUES (?, ?) ON CONFLICT (entry_id) DO NOTHING').run(entryId, now.toISOString()).changes) > 0
+}
+
+export function releaseClaim(db: DatabaseSync, entryId: number): void {
+  db.prepare('DELETE FROM issue_claims WHERE entry_id = ?').run(entryId)
+}
+
+export interface PendingOpen {
+  entryId: number
+  projectId: number | null
+  description: string
+  reason: string
+  requestedAt: string
+}
+
+export function addPendingOpen(db: DatabaseSync, pending: PendingOpen): void {
+  db.prepare(
+    `INSERT INTO pending_opens (entry_id, project_id, description, reason, requested_at) VALUES (?, ?, ?, ?, ?)
+     ON CONFLICT (entry_id) DO UPDATE SET project_id = excluded.project_id, description = excluded.description, reason = excluded.reason, requested_at = excluded.requested_at`,
+  ).run(pending.entryId, pending.projectId, pending.description, pending.reason, pending.requestedAt)
+}
+
+export function removePendingOpen(db: DatabaseSync, entryId: number): boolean {
+  return Number(db.prepare('DELETE FROM pending_opens WHERE entry_id = ?').run(entryId).changes) > 0
+}
+
+export function listPendingOpens(db: DatabaseSync): PendingOpen[] {
+  const rows = db.prepare('SELECT * FROM pending_opens ORDER BY requested_at, entry_id').all() as { entry_id: number; project_id: number | null; description: string; reason: string; requested_at: string }[]
+  return rows.map((row) => ({ entryId: Number(row.entry_id), projectId: row.project_id === null ? null : Number(row.project_id), description: row.description, reason: row.reason, requestedAt: row.requested_at }))
 }

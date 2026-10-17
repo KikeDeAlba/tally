@@ -1,5 +1,5 @@
 import type { BitaEntry } from '../integrations/bita.ts'
-import type { Registration } from '../db/registrations.ts'
+import { countsAsRegistered, type Registration } from '../db/registrations.ts'
 import type { EnrichedTimeEntry } from './types.ts'
 import { toDecimalHours } from './duration.ts'
 import { toJiraStarted } from './timezone.ts'
@@ -43,6 +43,6 @@ export function expandSegments(entries: readonly BitaEntry[], timezone: string):
 export function applyRegistrations(entries: readonly EnrichedTimeEntry[], registrations: ReadonlyMap<number, Registration>): EnrichedTimeEntry[] {
   return entries.map((entry) => {
     const registration = registrations.get(entry.id)
-    return { ...entry, registered: registration !== undefined, issueKey: registration?.issueKey ?? null }
+    return { ...entry, registered: countsAsRegistered(registration), issueKey: registration?.issueKey ?? null }
   })
 }

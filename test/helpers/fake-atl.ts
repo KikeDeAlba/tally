@@ -1,4 +1,4 @@
-import { appendFileSync, readFileSync } from 'node:fs'
+import { appendFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
 
 interface FakeIssue {
   key: string
@@ -18,12 +18,19 @@ interface State {
   pageSize?: number
   sites?: Record<string, unknown>[]
   sitesFail?: boolean
+  myself?: Record<string, unknown>
+  nextIssue?: number
+  boards?: Record<string, unknown>[]
+  sprints?: Record<string, unknown>[]
+  transitions?: Record<string, unknown>[]
+  createFails?: boolean
 }
 
 const args = process.argv.slice(2).filter((arg) => arg !== '--json')
 const state = JSON.parse(readFileSync(process.env['FAKE_ATL_STATE'] ?? '', 'utf8')) as State
 const log = process.env['FAKE_ATL_LOG']
-if (log) appendFileSync(log, `${JSON.stringify(args)}\n`)
+const logged = args.map((arg) => (arg.startsWith('@') && existsSync(arg.slice(1)) ? `@${readFileSync(arg.slice(1), 'utf8')}` : arg))
+if (log) appendFileSync(log, `${JSON.stringify(logged)}\n`)
 
 function reply(command: string, data: unknown): void {
   process.stdout.write(`${JSON.stringify({ schemaVersion: 1, ok: true, command, generatedAt: new Date().toISOString(), data })}\n`)
@@ -80,6 +87,28 @@ function search(input: Record<string, unknown>) {
 const [head, sub, operation] = args
 if (head === 'capabilities') {
   reply('capabilities', { name: 'atl', version: '0.3.0', envelope: 1, capabilities: ['atlassian.sites', 'atlassian.api.call', 'jira.issue.read'], emits: [] })
+} else if (head === 'jira' && sub === 'myself') {
+  reply('jira myself', state.myself ?? { accountId: 'acc-me', displayName: 'Yo' })
+} else if (head === 'jira' && sub === 'issue' && operation === 'create') {
+  if (state.createFails) fail('jira issue create', 'HTTP_400', 'Field customfield_10015 is not on the screen.', 4)
+  else {
+    const number = state.nextIssue ?? 100
+    const project = args[args.indexOf('--project') + 1] ?? 'X'
+    writeFileSync(process.env['FAKE_ATL_STATE'] ?? '', JSON.stringify({ ...state, nextIssue: number + 1 }))
+    reply('jira issue create', { id: String(number), key: `${project}-${number}`, url: `https://example.atlassian.net/browse/${project}-${number}` })
+  }
+} else if (head === 'jira' && sub === 'issue' && operation === 'edit') {
+  reply('jira issue edit', { key: args[3] })
+} else if (head === 'jira' && sub === 'issue' && operation === 'transitions') {
+  reply('jira issue transitions', state.transitions ?? [])
+} else if (head === 'jira' && sub === 'issue' && operation === 'transition') {
+  reply('jira issue transition', { id: args[4], name: 'moved', to: null })
+} else if (head === 'jira' && sub === 'board' && operation === 'ls') {
+  reply('jira board ls', state.boards ?? [])
+} else if (head === 'jira' && sub === 'sprint' && operation === 'ls') {
+  reply('jira sprint ls', state.sprints ?? [])
+} else if (head === 'jira' && sub === 'sprint' && operation === 'add') {
+  reply('jira sprint add', { sprint: Number(args[3]), moved: (args[args.indexOf('--issues') + 1] ?? '').split(',') })
 } else if (head === 'site' && sub === 'ls') {
   if (state.sitesFail) fail('site ls', 'CONFIG_ERROR', 'No sites configured.', 1)
   else reply('site ls', state.sites ?? [])

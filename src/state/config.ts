@@ -30,6 +30,7 @@ export interface ProjectMapping {
   timetrackingAvailable?: boolean
   site?: string
   boardId?: number
+  autoIssue?: boolean
   verifiedAt?: string
 }
 
@@ -39,6 +40,7 @@ export interface JiraConfig {
   accountId?: string
   email?: string
   site?: string
+  startDateField?: string
 }
 
 export interface ConfigDefaults {
@@ -162,6 +164,15 @@ export async function setBoard(projectId: number, boardId: number, file: string 
   const mapping = config.projectMapping[String(projectId)]
   if (!mapping) throw new Error(`Project ${projectId} is not mapped to a Jira project.`)
   mapping.boardId = boardId
+  await writeConfig(config, file)
+  return config
+}
+
+export async function setAutoIssue(projectId: number, autoIssue: boolean, file: string = defaultConfigPath()): Promise<TallyConfig> {
+  const config = await readConfig(file)
+  const mapping = config.projectMapping[String(projectId)]
+  if (!mapping) throw new Error(`Project ${projectId} is not mapped to a Jira project.`)
+  mapping.autoIssue = autoIssue
   await writeConfig(config, file)
   return config
 }

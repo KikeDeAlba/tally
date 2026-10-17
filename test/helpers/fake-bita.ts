@@ -5,6 +5,8 @@ interface State {
   range: { fromDay: string; toDay: string; timezone: string }
   projects: { id: number; name: string; jira: boolean }[]
   filterByRange?: boolean
+  touched?: Record<string, string[]>
+  repos?: Record<string, string[]>
 }
 
 const args = process.argv.slice(2).filter((arg) => arg !== '--json')
@@ -28,7 +30,7 @@ if (head === 'capabilities') {
   const id = Number(third)
   const entry = state.entries.find((item) => item.id === id) ?? state.entries.find((item) => (item.segments ?? []).some((segment) => segment.entryId === id))
   if (!entry) fail('entries get', 'ENTRY_NOT_FOUND', `No entry #${id}.`, 3)
-  else reply('entries get', { id, description: entry.description, kind: entry.kind, projectId: entry.projectId, projectName: entry.projectName, startedAt: entry.start, stoppedAt: entry.stop, note: null })
+  else reply('entries get', { id, description: entry.description, kind: entry.kind, projectId: entry.projectId, projectName: entry.projectName, startedAt: entry.start, stoppedAt: entry.stop, note: null, ...(state.touched ? { touched: state.touched[String(id)] ?? [] } : {}) })
 } else if (head === 'entries') {
   const from = args.includes('--from') ? args[args.indexOf('--from') + 1] : undefined
   const to = args.includes('--to') ? args[args.indexOf('--to') + 1] : undefined
@@ -39,6 +41,9 @@ if (head === 'capabilities') {
     })
     reply('entries', inRange, { range: { ...state.range, fromDay: from, toDay: to }, warnings: [] })
   } else reply('entries', state.entries, { range: state.range, warnings: [] })
+} else if (head === 'project' && sub === 'repo' && third === 'ls') {
+  const project = args[args.indexOf('--project') + 1] ?? ''
+  reply('project repo ls', { repos: (state.repos?.[project] ?? []).map((repo) => ({ project: project, path: repo, slug: null, source: 'manual', exists: true })) })
 } else if (head === 'projects') {
   reply('projects', state.projects)
 } else {

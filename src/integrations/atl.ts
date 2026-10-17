@@ -1,4 +1,7 @@
 import { invokeTool, requireTool, ToolMissingError, type FoundTool } from '@kikedealba/kit/registry'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import path from 'node:path'
 import { ConflictError, NotFoundError, TallyError } from '../errors.ts'
 
 export const ATL_INSTALL_HINT = 'npm install -g @kikedealba/atl && atl setup'
@@ -185,6 +188,175 @@ export async function requireAtl(): Promise<AtlClient> {
   } catch (error) {
     if (error instanceof ToolMissingError) {
       throw new NotFoundError('atl is not installed (or it is too old to call Jira REST operations), and coworkers are read from Jira through it.', 'ATL_MISSING', ATL_INSTALL_HINT)
+    }
+    throw error
+  }
+}
+
+export const ATL_WRITE_CAPABILITY = 'jira.issue.write'
+
+export interface NewJiraIssue {
+  project: string
+  type: string
+  summary: string
+  description?: string
+  parent?: string
+  assignee?: string
+  fields?: Record<string, unknown>
+}
+
+export interface JiraTransition {
+  id: string
+  name: string
+  to: string | null
+  category: string | null
+}
+
+export interface JiraBoard {
+  id: number
+  name: string
+  type: string | null
+}
+
+export interface JiraSprint {
+  id: number
+  name: string
+  state: string | null
+}
+
+export interface JiraWriter {
+  myself(): Promise<string | null>
+  createIssue(issue: NewJiraIssue): Promise<{ key: string; url: string | null }>
+  editIssue(key: string, changes: { summary?: string; description?: string }): Promise<void>
+  transitions(key: string): Promise<JiraTransition[]>
+  transition(key: string, transitionId: string): Promise<void>
+  boards(project: string): Promise<JiraBoard[]>
+  activeSprints(boardId: number): Promise<JiraSprint[]>
+  addToSprint(sprintId: number, issues: readonly string[]): Promise<void>
+}
+
+function toTransition(raw: unknown): JiraTransition | null {
+  const data = record(raw)
+  const id = text(data['id'])
+  if (!id) return null
+  return { id, name: text(data['name']) ?? '', to: text(data['to']), category: text(data['category']) }
+}
+
+function numericId(value: unknown): number | null {
+  const parsed = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : Number.NaN
+  return Number.isInteger(parsed) ? parsed : null
+}
+
+export class CliJiraWriter implements JiraWriter {
+  readonly tool: FoundTool
+  readonly site: string | undefined
+
+  constructor(tool: FoundTool, site?: string) {
+    this.tool = tool
+    this.site = site
+  }
+
+  private async run(argv: readonly string[]): Promise<unknown> {
+    const { envelope } = await invokeTool(this.tool, [...argv, ...(this.site ? ['--site', this.site] : [])], { timeoutMs: 120_000 })
+    if (!envelope.ok) throw atlFailure(argv.slice(0, 3).join(' '), envelope.error)
+    return envelope.data
+  }
+
+  private async withTextFiles<T>(texts: Record<string, string | undefined>, use: (paths: Record<string, string>) => Promise<T>): Promise<T> {
+    const dir = await mkdtemp(path.join(tmpdir(), 'tally-atl-'))
+    try {
+      const paths: Record<string, string> = {}
+      for (const [name, value] of Object.entries(texts)) {
+        if (value === undefined) continue
+        const file = path.join(dir, `${name}.md`)
+        await writeFile(file, value, 'utf8')
+        paths[name] = `@${file}`
+      }
+      return await use(paths)
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  }
+
+  async myself(): Promise<string | null> {
+    return text(record(await this.run(['jira', 'myself']))['accountId'])
+  }
+
+  async createIssue(issue: NewJiraIssue): Promise<{ key: string; url: string | null }> {
+    return this.withTextFiles({ summary: issue.summary, description: issue.description }, async (files) => {
+      const data = record(
+        await this.run([
+          'jira', 'issue', 'create',
+          '--project', issue.project,
+          '--type', issue.type,
+          '--summary', files['summary'] ?? issue.summary,
+          ...(files['description'] ? ['--description', files['description']] : []),
+          ...(issue.parent ? ['--parent', issue.parent] : []),
+          ...(issue.assignee ? ['--assignee', issue.assignee] : []),
+          ...(issue.fields ? ['--fields', JSON.stringify(issue.fields)] : []),
+        ]),
+      )
+      const key = text(data['key'])
+      if (!key) throw new TallyError('atl jira issue create answered without an issue key.', 'ATL_FAILED')
+      return { key, url: text(data['url']) }
+    })
+  }
+
+  async editIssue(key: string, changes: { summary?: string; description?: string }): Promise<void> {
+    await this.withTextFiles({ summary: changes.summary, description: changes.description }, async (files) => {
+      await this.run([
+        'jira', 'issue', 'edit', key,
+        ...(files['summary'] ? ['--summary', files['summary']] : []),
+        ...(files['description'] ? ['--description', files['description']] : []),
+      ])
+    })
+  }
+
+  async transitions(key: string): Promise<JiraTransition[]> {
+    const data = await this.run(['jira', 'issue', 'transitions', key])
+    return (Array.isArray(data) ? data : []).map(toTransition).filter((item): item is JiraTransition => item !== null)
+  }
+
+  async transition(key: string, transitionId: string): Promise<void> {
+    await this.run(['jira', 'issue', 'transition', key, transitionId])
+  }
+
+  async boards(project: string): Promise<JiraBoard[]> {
+    const data = await this.run(['jira', 'board', 'ls', project, '--fields', 'id,name,type'])
+    return (Array.isArray(data) ? data : []).flatMap((raw) => {
+      const board = record(raw)
+      const id = numericId(board['id'])
+      return id === null ? [] : [{ id, name: text(board['name']) ?? '', type: text(board['type']) }]
+    })
+  }
+
+  async activeSprints(boardId: number): Promise<JiraSprint[]> {
+    const data = await this.run(['jira', 'sprint', 'ls', String(boardId), '--state', 'active'])
+    return (Array.isArray(data) ? data : []).flatMap((raw) => {
+      const sprint = record(raw)
+      const id = numericId(sprint['id'])
+      return id === null ? [] : [{ id, name: text(sprint['name']) ?? '', state: text(sprint['state']) }]
+    })
+  }
+
+  async addToSprint(sprintId: number, issues: readonly string[]): Promise<void> {
+    await this.run(['jira', 'sprint', 'add', String(sprintId), '--issues', issues.join(',')])
+  }
+}
+
+let writerOverride: ((site?: string) => JiraWriter) | undefined
+
+export function setJiraWriterFactory(factory: ((site?: string) => JiraWriter) | undefined): void {
+  writerOverride = factory
+}
+
+export async function requireJiraWriter(site?: string): Promise<JiraWriter> {
+  if (writerOverride) return writerOverride(site)
+  try {
+    return new CliJiraWriter(await requireTool('atl', ATL_INSTALL_HINT, { capability: ATL_WRITE_CAPABILITY }), site)
+  } catch (error) {
+    if (error instanceof ToolMissingError) {
+      throw new NotFoundError('atl is not installed (or it is too old to write Jira issues), and the card is opened through it.', 'ATL_MISSING', ATL_INSTALL_HINT)
     }
     throw error
   }

@@ -3,7 +3,7 @@ name: tally-push
 description: Sube a Jira el tiempo pendiente de bita, con confirmación
 argument-hint: "[today|yesterday|week|last-week|month|last-month | --from YYYY-MM-DD --to YYYY-MM-DD]"
 disable-model-invocation: true
-allowed-tools: Bash(tally summary:*), Bash(tally map:*), Bash(tally config:*), Bash(tally project jira:*)
+allowed-tools: Bash(tally summary:*), Bash(tally map:*), Bash(tally config:*), Bash(tally project jira:*), Bash(tally issue:*)
 ---
 
 Vuelca a Jira el tiempo pendiente de bita. Alcance: `$ARGUMENTS` (vacío = todo
