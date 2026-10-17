@@ -57,8 +57,10 @@ no se escribe nada. Sin inkwell todo funciona, con títulos y sin notas.
    `per-run`.
 7. **Propuesta y una sola confirmación.**
 8. **Escribir grupo por grupo**: crear la subtarea (asignada, con fecha de
-   inicio y estimación), un worklog por bloque, comentario de resultados,
-   cierre, `tally link` e `inkwell page link`.
+   inicio y estimación), meter su Historia (o la Tarea) al sprint activo del
+   tablero, un worklog por bloque, comentario de resultados,
+   cierre, `tally link` e `inkwell page link`. Un grupo con `issueKey` ya
+   tiene tarjeta (abierta con el cronómetro): no se crea otra.
 
 ## Reglas duras
 

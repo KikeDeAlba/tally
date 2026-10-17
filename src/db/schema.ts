@@ -36,6 +36,23 @@ export const MIGRATIONS: readonly Migration[] = [
       `CREATE INDEX merges_survivor ON merges (survivor_id)`,
     ],
   },
+  {
+    version: 3,
+    statements: [
+      `ALTER TABLE registrations ADD COLUMN filled_by TEXT`,
+      `CREATE TABLE pending_opens (
+         entry_id INTEGER PRIMARY KEY,
+         project_id INTEGER,
+         description TEXT NOT NULL DEFAULT '',
+         reason TEXT NOT NULL,
+         requested_at TEXT NOT NULL
+       )`,
+      `CREATE TABLE issue_claims (
+         entry_id INTEGER PRIMARY KEY,
+         claimed_at TEXT NOT NULL
+       )`,
+    ],
+  },
 ]
 
 export const LATEST_VERSION = MIGRATIONS.reduce((max, migration) => Math.max(max, migration.version), 0)

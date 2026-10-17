@@ -280,6 +280,14 @@ test('map set, story, list and unset keep the Jira targets in the tally config',
   assert.equal(summary.json.data.groups[0].jiraProjectKey, 'INN')
   assert.equal(summary.json.data.groups[0].jiraStories.devops.key, 'INN-40')
   assert.deepEqual(summary.json.meta.unmappedProjects, [])
+  assert.equal(summary.json.data.groups[0].jiraBoardId, null)
+
+  const sprintBoard = await tally(['map', 'board', '789', '84', '--json'], env)
+  assert.deepEqual(sprintBoard.json.data, { projectId: 789, jiraProjectKey: 'INN', boardId: 84 })
+  assert.equal((await tally(['map', 'board', '789', 'tablero', '--json'], env)).code, 2)
+  assert.equal((await tally(['map', 'board', '900', '84', '--json'], env)).code, 2)
+  const brief = await tally(['summary', '--pending', '--brief', '--json'], env)
+  assert.equal(brief.json.data.projects['789'].jiraBoardId, 84)
 
   const board = await tally(['map', 'set', '789', 'INN', '--no-epic', '--json'], env)
   assert.equal(board.code, 0)
@@ -332,8 +340,8 @@ test('setup registers tally and installs the skill and commands in the agents', 
   const result = await tally(['setup', '--agents', 'codex,gemini', '--json'], env)
   assert.equal(result.code, 0, result.stdout + result.stderr)
   const registered = await readManifest('tally', platformContext({ env, home: dir }))
-  assert.deepEqual(registered?.capabilities, ['timesheet.summary', 'timesheet.status', 'timesheet.map', 'timesheet.link', 'timesheet.overtime'])
-  assert.deepEqual(registered?.subscribes.map((item) => [item.tool, item.events, item.command.at(-1)]), [['bita', ['delete', 'merge'], 'bita-hook']])
+  assert.deepEqual(registered?.capabilities, ['timesheet.summary', 'timesheet.status', 'timesheet.map', 'timesheet.link', 'timesheet.overtime', 'timesheet.issue'])
+  assert.deepEqual(registered?.subscribes.map((item) => [item.tool, item.events, item.command.at(-1)]), [['bita', ['delete', 'merge', 'start', 'stop'], 'bita-hook']])
   assert.ok(existsSync(path.join(dir, '.gemini', 'extensions', 'tally', 'skills', 'tally', 'SKILL.md')))
   assert.ok(existsSync(path.join(dir, '.gemini', 'extensions', 'tally', 'commands', 'tally-push.toml')))
 
@@ -389,7 +397,13 @@ test('bita-hook keeps deleted registrations as orphans and records merges', asyn
   const pending = await tally(['summary', '--pending', '--no-notes', '--json'], env)
   assert.deepEqual(pending.json.data.groups.flatMap((group: { entryIds: number[] }) => group.entryIds), [1, 4, 2])
 
-  const ignored = path.join(dir, 'start.json')
-  await writeFile(ignored, JSON.stringify({ event: 'start', entry: { id: 9 } }))
+  const ignored = path.join(dir, 'amend.json')
+  await writeFile(ignored, JSON.stringify({ event: 'amend', entry: { id: 9 } }))
   assert.equal((await tally(['bita-hook', '--file', ignored, '--json'], env)).json.data.ignored, true)
+
+  const started = path.join(dir, 'start.json')
+  await writeFile(started, JSON.stringify({ event: 'start', entry: { id: 9, projectId: 789 } }))
+  const start = await tally(['bita-hook', '--file', started, '--json'], env)
+  assert.equal(start.code, 0, start.stdout + start.stderr)
+  assert.equal(start.json.data.action, 'ignored')
 })

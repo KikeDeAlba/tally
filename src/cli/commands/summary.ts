@@ -15,7 +15,7 @@ import type { TaskGroup } from '../../domain/types.ts'
 import { requireBita, type BitaEntries, type BitaEntry } from '../../integrations/bita.ts'
 import { findNotesProvider } from '../../integrations/inkwell.ts'
 import { openDatabase } from '../../db/open.ts'
-import { countRegistrations, registrationsFor } from '../../db/registrations.ts'
+import { countRegistrations, countsAsRegistered, registrationsFor } from '../../db/registrations.ts'
 import { jiraTarget, projectGoesToJira, readConfig, storyThemes, type TallyConfig } from '../../state/config.ts'
 
 const SUMMARY_OPTIONS = {
@@ -59,10 +59,10 @@ export function mergeConflicts(entries: readonly BitaEntry[], registrations: Sum
   for (const entry of entries) {
     if (entry.segments.length === 0) continue
     const blocks = entry.segments.map((segment) => segment.entryId)
-    const registered = blocks.filter((id) => registrations.has(id))
+    const registered = blocks.filter((id) => countsAsRegistered(registrations.get(id)))
     if (registered.length === 0) continue
     const issues = [...new Set(registered.map((id) => registrations.get(id)?.issueKey ?? '').filter((key) => key.length > 0))]
-    const pending = blocks.filter((id) => !registrations.has(id))
+    const pending = blocks.filter((id) => !countsAsRegistered(registrations.get(id)))
     if (issues.length > 1 || pending.length > 0) {
       conflicts.push({ entryId: entry.id, description: entry.description, issues, registeredEntryIds: registered, pendingEntryIds: pending })
     }
@@ -185,6 +185,7 @@ function briefProject(group: SummaryGroup) {
     hierarchy: group.hierarchy,
     jiraEpicKey: group.jiraEpicKey,
     epicResolved: group.epicResolved,
+    jiraBoardId: group.jiraBoardId,
     ...(group.epicMode === 'per-run' ? { jiraStoriesByEpic: group.jiraStoriesByEpic } : { jiraStories: group.jiraStories }),
     jiraStoryIssueTypeName: group.jiraStoryIssueTypeName,
     jiraWorkIssueTypeName: group.jiraWorkIssueTypeName,
@@ -198,6 +199,7 @@ function briefGroup(group: SummaryGroup) {
     projectId: group.projectId,
     jira: group.jira,
     kind: group.kind,
+    ...(group.issueKey !== null ? { issueKey: group.issueKey } : {}),
     totalHuman: group.totalHuman,
     estimateHuman: group.estimateHuman,
     days: group.days,

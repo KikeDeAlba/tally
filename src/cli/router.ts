@@ -13,6 +13,7 @@ import { runSetup, runUninstall } from './commands/setup.ts'
 import { runProject } from './commands/project.ts'
 import { runBitaHook } from './commands/hook.ts'
 import { runOvertime } from './commands/overtime.ts'
+import { runIssue } from './commands/issue.ts'
 
 export const HELP = `tally ${VERSION} — bita time grouped into Jira-ready work, and what was already logged
 
@@ -29,6 +30,16 @@ Usage:
   tally map set <projectId> <JIRAKEY> [--parent KEY-123 | --no-epic] [--issue-type NAME] [--hierarchy H]
   tally map unset <projectId>
   tally map story <projectId> <themeId> <ISSUE-KEY> [--epic KEY-123 | --no-epic] [--summary TEXT]
+  tally map board <projectId> <boardId>   Board whose active sprint new issues go to
+  tally map auto <projectId> on|off       Open a Jira card whenever a bita timer of that project starts
+  tally issue open <entryId> [--jira-project KEY] [--story KEY] [--json]
+                                   Open the Jira card of a bita entry: assigned, dated, in the active
+                                   sprint and in progress; the worklog still waits for /tally-push
+  tally issue fill <entryId> [--summary TEXT] [--description TEXT|@file] [--json]
+                                   Write the card's text; without text, build it from the note, the
+                                   touched files and the commits of the session (never over the agent's)
+  tally issue show <entryId> [--json]   The card of an entry, or null
+  tally issue pending [--json]     Entries whose card waits for a Jira project
   tally link <entryIds...> --issue KEY [--worklog ID] [--force]
   tally link <entryIds...> --unlink
   tally project jira <id|key|name> [on|off]   Whether a bita project's time goes to Jira
@@ -46,18 +57,19 @@ Usage:
   tally capabilities [--json]
   tally setup [--agents detected|all|claude,opencode,codex,gemini] [--no-agents]
   tally uninstall
-  tally bita-hook < event.json     Handles bita delete and merge events (called by bita through kit)
+  tally bita-hook < event.json     Handles bita start, stop, delete and merge events (called by bita through kit)
   tally help | --version
 
 Presets: today, yesterday, week, last-week, month, last-month.
 Entries come from bita (bita entries --json); per-entry notes from inkwell when it is installed.
 Jira is written by the agent through atl; tally records it with "tally link".
+The one exception is "tally issue", which opens and fills the card of a running timer through atl.
 `
 
 function commandName(argv: readonly string[]): string {
   const words = argv.filter((arg) => !arg.startsWith('-'))
   const head = words[0] ?? 'help'
-  if (['map', 'config', 'project'].includes(head) && words[1]) return `${head} ${words[1]}`
+  if (['map', 'config', 'project', 'issue'].includes(head) && words[1]) return `${head} ${words[1]}`
   if (head === 'overtime' && words[1] === 'exclude') return words[2] ? `overtime exclude ${words[2]}` : 'overtime exclude'
   return head
 }
@@ -92,6 +104,8 @@ async function dispatch(argv: readonly string[]): Promise<number> {
       return runMap(rest)
     case 'link':
       return runLink(rest)
+    case 'issue':
+      return runIssue(rest)
     case 'config':
       return runConfig(rest)
     case 'project':

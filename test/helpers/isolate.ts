@@ -8,3 +8,4 @@ process.env['TALLY_DB_PATH'] ??= join(sandbox, 'tally.db')
 process.env['TALLY_CONFIG_PATH'] ??= join(sandbox, 'config.json')
 process.env['BITA_DB_PATH'] ??= join(sandbox, 'bita.db')
 process.env['BITA_CONFIG_PATH'] ??= join(sandbox, 'bita-config.json')
+process.env['TALLY_NO_NOTIFY'] ??= '1'

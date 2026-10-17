@@ -63,6 +63,7 @@ export interface TaskGroup {
   splitReason: 'none' | 'max-task-hours'
   jira: boolean
   kind: string | null
+  issueKey: string | null
   meeting?: MeetingInfo
   meetings?: MeetingInfo[]
 }

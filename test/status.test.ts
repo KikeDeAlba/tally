@@ -11,7 +11,7 @@ import { TEST_TZ } from './helpers/entries.ts'
 const RANGE = { fromDay: '2026-09-14', toDay: '2026-09-20', timezone: TEST_TZ }
 
 function registration(entryId: number, issueKey: string): Registration {
-  return { entryId, issueKey, worklogId: null, linkedAt: '2026-09-19T00:00:00Z', source: 'tally', orphanedAt: null }
+  return { entryId, issueKey, worklogId: null, linkedAt: '2026-09-19T00:00:00Z', source: 'tally', orphanedAt: null, filledBy: null }
 }
 
 function status(entries: BitaEntry[], extra: { registrations?: Registration[]; config?: TallyConfig; projectId?: number | null; options?: Partial<StatusOptions> } = {}) {
