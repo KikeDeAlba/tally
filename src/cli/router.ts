@@ -29,6 +29,7 @@ Usage:
   tally map set <projectId> <JIRAKEY> [--parent KEY-123 | --no-epic] [--issue-type NAME] [--hierarchy H]
   tally map unset <projectId>
   tally map story <projectId> <themeId> <ISSUE-KEY> [--epic KEY-123 | --no-epic] [--summary TEXT]
+  tally map board <projectId> <boardId>   Board whose active sprint new issues go to
   tally link <entryIds...> --issue KEY [--worklog ID] [--force]
   tally link <entryIds...> --unlink
   tally project jira <id|key|name> [on|off]   Whether a bita project's time goes to Jira

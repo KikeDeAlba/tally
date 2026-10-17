@@ -10,6 +10,7 @@ import {
   normalizeProjectMapping,
   NO_EPIC,
   readConfig,
+  setBoard,
   setProjectMapping,
   setStory,
   unsetProjectMapping,
@@ -254,4 +255,19 @@ test('keys tally does not know survive a rewrite', async () => {
   const raw = JSON.parse(await readFile(configPath, 'utf8'))
   assert.deepEqual(raw.extra, { keep: true })
   assert.equal(raw.projectMapping['5'].jiraProjectKey, 'CIN')
+})
+
+test('the sprint board stays with its Jira project', async () => {
+  const configPath = await tempConfigPath()
+
+  await setProjectMapping(1, { projectName: 'X', jiraProjectKey: 'DD' }, configPath)
+  await setBoard(1, 174, configPath)
+  await setProjectMapping(1, { projectName: 'X', jiraProjectKey: 'DD', hierarchy: 'story-subtask' }, configPath)
+  assert.equal((await readConfig(configPath)).projectMapping['1']?.boardId, 174)
+  assert.equal(jiraTarget((await readConfig(configPath)).projectMapping['1']).jiraBoardId, 174)
+
+  await setProjectMapping(1, { projectName: 'X', jiraProjectKey: 'INN' }, configPath)
+  assert.equal((await readConfig(configPath)).projectMapping['1']?.boardId, undefined)
+  assert.equal(jiraTarget(undefined).jiraBoardId, null)
+  await assert.rejects(setBoard(2, 84, configPath))
 })

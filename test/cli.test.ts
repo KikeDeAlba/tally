@@ -280,6 +280,14 @@ test('map set, story, list and unset keep the Jira targets in the tally config',
   assert.equal(summary.json.data.groups[0].jiraProjectKey, 'INN')
   assert.equal(summary.json.data.groups[0].jiraStories.devops.key, 'INN-40')
   assert.deepEqual(summary.json.meta.unmappedProjects, [])
+  assert.equal(summary.json.data.groups[0].jiraBoardId, null)
+
+  const sprintBoard = await tally(['map', 'board', '789', '84', '--json'], env)
+  assert.deepEqual(sprintBoard.json.data, { projectId: 789, jiraProjectKey: 'INN', boardId: 84 })
+  assert.equal((await tally(['map', 'board', '789', 'tablero', '--json'], env)).code, 2)
+  assert.equal((await tally(['map', 'board', '900', '84', '--json'], env)).code, 2)
+  const brief = await tally(['summary', '--pending', '--brief', '--json'], env)
+  assert.equal(brief.json.data.projects['789'].jiraBoardId, 84)
 
   const board = await tally(['map', 'set', '789', 'INN', '--no-epic', '--json'], env)
   assert.equal(board.code, 0)

@@ -25,6 +25,9 @@ invertidas: `cat > /tmp/tally-desc.md <<'MD'` … `MD`.
 | Transicionar | `atl jira issue transition <KEY> <id> --json` |
 | JQL | `atl jira search "<JQL>" --fields <campos> [--limit n] --json` (sin `--fields` trae solo key, summary, status y assignee; pide exactamente lo que hace falta) |
 | Adjuntar | `atl jira attach <KEY> <archivo> --json` |
+| Tableros | `atl jira board ls <PROYECTO> --fields id,name,type --json` |
+| Sprint activo | `atl jira sprint ls <boardId> --state active --json` |
+| Meter al sprint | `atl jira sprint add <sprintId> --issues <KEY>[,<KEY>] --json` |
 
 ## La forma de `tally summary --pending --brief --json`
 
@@ -143,6 +146,14 @@ inmediato con `tally map story <projectId> <tema> <KEY>` (con `per-run`,
 «Historia», «Subtarea», «Epic»); nunca asumas «Task». Con el tipo: si
 `timetracking` está en la pantalla y qué campos son obligatorios.
 
+**Sprint activo**, una vez por tablero. El tablero es `jiraBoardId`; si viene
+`null`, `atl jira board ls <PROYECTO>`: con uno solo, ese es; con varios, es
+una decisión pendiente (no se adivina). En cuanto se escribe, el tablero queda
+con `tally map board <projectId> <boardId>` y no se vuelve a buscar. Luego `atl jira sprint ls
+<boardId> --state active`: con uno, ese es el sprint; con varios, decisión
+pendiente; sin ninguno (o si el tablero no admite sprints), las tareas quedan
+en el backlog y se dice en la propuesta.
+
 Aviso de duplicados antes de crear (avisa, no decide):
 `project = X AND summary ~ "..." AND reporter = currentUser() AND created >= -30d`,
 con `--fields summary,parent,created --limit 10`.
@@ -150,7 +161,7 @@ con `--fields summary,parent,created --limit 10`.
 ## 6. Propuesta y confirmación
 
 Una tabla, una fila por tarea: proyecto → Jira, tipo, épica e Historia (marca
-lo que se crea), resumen, worklogs, días, total y estimación. Debajo: excluido,
+lo que se crea), sprint, resumen, worklogs, días, total y estimación. Debajo: excluido,
 solapes, conflictos, partes y fuera de Jira. Las tareas se cierran al terminar
 salvo que el usuario pida lo contrario. La confirmación va por la interfaz de
 preguntas con cuatro opciones: Confirmar y escribir · Ajustar · Ver el detalle
@@ -183,15 +194,20 @@ Sin paralelismo y sin volver a preguntar. Para reuniones, ver `meetings.md`.
    `docs[]`, reformulado como necesidad. Criterios numerados, nunca `- [ ]`.
    Las secciones «Hallazgos» y «Pendiente» de una nota van a `inkwell backlog
    add`, no a Jira.
-3. Si no había `timetracking` en la creación: `atl jira issue edit <KEY>
+3. **Sprint activo**, si el tablero tiene uno: `atl jira sprint add <sprintId>
+   --issues <KEY>`. Una Subtarea no entra sola a un sprint (va con su padre),
+   así que con `epic-story-subtask` y `story-subtask` lo que se mete es la
+   Historia del grupo; con `flat`, la Tarea. Una vez por issue y corrida,
+   aunque ya esté en ese sprint (no hace daño). La épica nunca.
+4. Si no había `timetracking` en la creación: `atl jira issue edit <KEY>
    --estimate <estimateHuman> --fields
    '{"timetracking":{"originalEstimate":"<estimateHuman>","remainingEstimate":"0m"}}'`,
    antes del worklog. Si tampoco la acepta, sigue y avísalo una vez por
    proyecto.
-4. **Un worklog por cada `worklogs[]`**, con `startedJira` y `timeSpent`
+5. **Un worklog por cada `worklogs[]`**, con `startedJira` y `timeSpent`
    literales y comentario `bita · <startLocal> · bita:<entryId>`. Guarda los
    ids.
-5. **Comentario de resultados**, uno por issue:
+6. **Comentario de resultados**, uno por issue:
 
    ```
    ## Resultado
@@ -206,10 +222,10 @@ Sin paralelismo y sin volver a preguntar. Para reuniones, ver `meetings.md`.
 
    Las URLs salen de las referencias de la página; lo que no tiene URL
    confirmable no se cita. Lo que no quedó hecho va al backlog de inkwell.
-6. **Cerrar** (ver abajo), salvo que el usuario pidiera dejarlas abiertas.
-7. **`tally link <entryIds...> --issue <KEY> --json`**, una llamada con todos
+7. **Cerrar** (ver abajo), salvo que el usuario pidiera dejarlas abiertas.
+8. **`tally link <entryIds...> --issue <KEY> --json`**, una llamada con todos
    los `entryIds` (añade `--worklog <id>` repetido si hubo uno por entrada).
-8. `inkwell page link <pageId> --issue <KEY> --summary "<summary>" --status
+9. `inkwell page link <pageId> --issue <KEY> --summary "<summary>" --status
    "<estado>" --status-category <categoría>`, una por página de `pages[]`.
 
 ### Transición de cierre
@@ -232,6 +248,7 @@ Sin paralelismo y sin volver a preguntar. Para reuniones, ver `meetings.md`.
 |---|---|
 | Crear | Nada escrito: reintentar es seguro. |
 | Estimación | Continuar y avisar. |
+| Sprint | Continuar y avisar con el comando exacto: el issue queda en el backlog. |
 | Worklog parcial | `tally link` solo de las entradas que llegaron; reanudar sobre ese issue. |
 | Transición | Atar igual: el tiempo ya está en Jira. |
 | `tally link` | Detener la corrida y enseñar el comando exacto para repararlo: otra corrida duplicaría worklogs. |
@@ -242,5 +259,5 @@ se quita a mano.
 ## Resumen final
 
 Una fila por tarea: key enlazada, total y una marca por paso (crear, asignar,
-fechar, estimar, worklog, comentar o adjuntar minuta, cerrar, atar, página).
+fechar, sprint, estimar, worklog, comentar o adjuntar minuta, cerrar, atar, página).
 Una casilla que no corrió se deja vacía. Las inconsistencias van arriba.
