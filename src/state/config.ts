@@ -29,6 +29,7 @@ export interface ProjectMapping {
   doneTransition?: { id: string; name: string }
   timetrackingAvailable?: boolean
   site?: string
+  boardId?: number
   verifiedAt?: string
 }
 
@@ -129,7 +130,7 @@ export async function writeConfig(config: TallyConfig, file: string = defaultCon
 
 export type ProjectMappingUpdate = Omit<ProjectMapping, 'parentKey'> & { parentKey?: string | null }
 
-const BOARD_SCOPED_FIELDS = ['storiesByEpic', 'doneTransition', 'issueTypeId', 'timetrackingAvailable'] as const satisfies readonly (keyof ProjectMapping)[]
+const BOARD_SCOPED_FIELDS = ['storiesByEpic', 'doneTransition', 'issueTypeId', 'timetrackingAvailable', 'boardId'] as const satisfies readonly (keyof ProjectMapping)[]
 
 export function mergeProjectMapping(existing: ProjectMapping | undefined, update: ProjectMappingUpdate): ProjectMapping {
   const { parentKey, ...fields } = update
@@ -152,6 +153,15 @@ export async function setProjectMapping(projectId: number, update: ProjectMappin
   const config = await readConfig(file)
   const key = String(projectId)
   config.projectMapping[key] = mergeProjectMapping(config.projectMapping[key], update)
+  await writeConfig(config, file)
+  return config
+}
+
+export async function setBoard(projectId: number, boardId: number, file: string = defaultConfigPath()): Promise<TallyConfig> {
+  const config = await readConfig(file)
+  const mapping = config.projectMapping[String(projectId)]
+  if (!mapping) throw new Error(`Project ${projectId} is not mapped to a Jira project.`)
+  mapping.boardId = boardId
   await writeConfig(config, file)
   return config
 }
@@ -187,6 +197,7 @@ export function jiraTarget(mapping: ProjectMapping | undefined, defaultSite: str
       epicResolved: false,
       jiraStories: {},
       jiraStoriesByEpic: {},
+      jiraBoardId: null,
     }
   }
 
@@ -201,6 +212,7 @@ export function jiraTarget(mapping: ProjectMapping | undefined, defaultSite: str
     epicResolved: mapping.epicResolved ?? false,
     jiraStories: storiesForEpic(mapping, parentKey ?? NO_EPIC),
     jiraStoriesByEpic: mapping.storiesByEpic ?? {},
+    jiraBoardId: mapping.boardId ?? null,
   }
 }
 

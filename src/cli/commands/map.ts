@@ -6,6 +6,7 @@ import {
   projectGoesToJira,
   NO_EPIC,
   readConfig,
+  setBoard,
   setProjectMapping,
   setStory,
   unsetProjectMapping,
@@ -100,6 +101,7 @@ export async function runMap(argv: readonly string[]): Promise<number> {
           { header: 'ISSUE TYPE' },
           { header: 'DONE TRANSITION' },
           { header: 'SITE' },
+          { header: 'BOARD' },
           { header: 'ON' },
         ],
         rows.map((row) => [
@@ -110,6 +112,7 @@ export async function runMap(argv: readonly string[]): Promise<number> {
           'issueTypeName' in row ? (row.issueTypeName ?? '') : '',
           'doneTransition' in row ? (row.doneTransition?.name ?? '') : '',
           'site' in row ? (row.site ?? '') : '',
+          'boardId' in row && row.boardId !== undefined ? String(row.boardId) : '',
           row.jira ? 'yes' : 'no',
         ]),
       ),
@@ -277,5 +280,35 @@ export async function runMap(argv: readonly string[]): Promise<number> {
     return 0
   }
 
-  throw new UsageError(`Unknown map subcommand "${subcommand}". Use list, set, unset or story.`)
+  if (subcommand === 'board') {
+    const [rawProjectId, rawBoardId] = args.positionals
+    if (!rawProjectId || !rawBoardId) throw new UsageError('Usage: tally map board <projectId> <boardId>')
+
+    const projectId = Number(rawProjectId)
+    if (!Number.isInteger(projectId)) {
+      throw new UsageError(`Invalid project id: "${rawProjectId}".`)
+    }
+    const boardId = Number(rawBoardId)
+    if (!Number.isInteger(boardId) || boardId <= 0) {
+      throw new UsageError(`Invalid board id: "${rawBoardId}". Use the numeric id from "atl jira board ls <KEY>".`)
+    }
+
+    const mapping = (await readConfig()).projectMapping[String(projectId)]
+    if (!mapping) {
+      throw new UsageError(
+        `Project ${projectId} is not mapped to a Jira project. Run "tally map set ${projectId} <JIRAKEY>" first.`,
+      )
+    }
+
+    await setBoard(projectId, boardId)
+
+    if (readBoolean(args, 'json')) {
+      writeJson(successEnvelope('map board', { projectId, jiraProjectKey: mapping.jiraProjectKey, boardId }))
+    } else {
+      writeOut(`Project ${projectId} takes its active sprint from board ${boardId} (${mapping.jiraProjectKey}).`)
+    }
+    return 0
+  }
+
+  throw new UsageError(`Unknown map subcommand "${subcommand}". Use list, set, unset, story or board.`)
 }

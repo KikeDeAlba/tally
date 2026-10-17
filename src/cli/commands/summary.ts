@@ -185,6 +185,7 @@ function briefProject(group: SummaryGroup) {
     hierarchy: group.hierarchy,
     jiraEpicKey: group.jiraEpicKey,
     epicResolved: group.epicResolved,
+    jiraBoardId: group.jiraBoardId,
     ...(group.epicMode === 'per-run' ? { jiraStoriesByEpic: group.jiraStoriesByEpic } : { jiraStories: group.jiraStories }),
     jiraStoryIssueTypeName: group.jiraStoryIssueTypeName,
     jiraWorkIssueTypeName: group.jiraWorkIssueTypeName,

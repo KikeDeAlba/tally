@@ -95,6 +95,7 @@ tally map set <projectId> <JIRAKEY> --parent <JIRAKEY-123>   # siempre a esa ép
 tally map set <projectId> <JIRAKEY> --no-epic                # al tablero: la épica se elige en cada corrida
 tally map set <projectId> <JIRAKEY> --site <sitio de atl>    # tablero en otro sitio
 tally map story <projectId> <tema> <ISSUE-KEY> [--epic <KEY-123> | --no-epic]
+tally map board <projectId> <boardId>        # tablero del que sale el sprint activo
 tally map unset <projectId>
 
 tally link 12 13 --issue DD-1896             # marca como registradas
