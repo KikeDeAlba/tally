@@ -96,7 +96,15 @@ tally map set <projectId> <JIRAKEY> --no-epic                # al tablero: la é
 tally map set <projectId> <JIRAKEY> --site <sitio de atl>    # tablero en otro sitio
 tally map story <projectId> <tema> <ISSUE-KEY> [--epic <KEY-123> | --no-epic]
 tally map board <projectId> <boardId>        # tablero del que sale el sprint activo
+tally map auto <projectId> on|off            # abrir la tarjeta al arrancar cada cronómetro del proyecto
 tally map unset <projectId>
+
+tally issue open 12 --json                   # tarjeta de Jira para la entrada 12 de bita
+tally issue open 12 --jira-project PP        # a otro proyecto de Jira (o uno sin mapeo)
+tally issue fill 12 --description @resumen.md  # texto del agente
+tally issue fill 12                          # texto automático: nota, archivos y commits
+tally issue show 12 --json                   # su tarjeta, o null (no toca Jira)
+tally issue pending                          # entradas que esperan que elijas proyecto
 
 tally link 12 13 --issue DD-1896             # marca como registradas
 tally link 12 --issue DD-1896 --worklog 10042
@@ -116,6 +124,36 @@ tally config set-jira --account-id <id> --atl-site <sitio> --issue-type Tarea
 
 Los ids de proyecto y de entrada son los de bita (`bita projects`, `bita
 entries`).
+
+### `issue`: la tarjeta de Jira ligada al cronómetro
+
+Es la única escritura en Jira que hace tally por su cuenta (con la CLI de atl);
+el resto lo escribe el agente.
+
+`tally issue open <entryId>` lee la entrada de bita y el mapeo de su proyecto y
+crea el issue de trabajo: Subtarea bajo la Historia del tema (`soporte`, o
+`sesiones` si es reunión; si no está en caché, la primera cacheada; sin
+ninguna, `NEEDS_STORY` con las opciones, y se reintenta con `--story KEY`), o
+Tarea suelta con `flat-task`. Título: el de la entrada, o `[WIP] <día>` si aún
+no tiene. Va asignado (`jira.accountId` o `atl jira myself`), con fecha de
+inicio (`customfield_10015`, o `jira.startDateField` de la config), su Historia
+(o la Tarea) al sprint activo del tablero (si el proyecto no tiene `boardId` y
+hay un solo tablero, se guarda; sin tablero o sin sprint activo, se queda en el
+backlog con un aviso) y pasa a un estado «en curso» si la transición existe.
+Sin mapeo ni `--jira-project`, falla con `NEEDS_PROJECT` y `data.options`: los
+proyectos de Jira mapeados, el más usado recientemente primero. Es idempotente:
+si la entrada ya tiene tarjeta, la devuelve.
+
+La tarjeta queda en `registrations` con `source = 'timer'` y sin worklog, así
+que la entrada **sigue pendiente** en `summary --pending`; su grupo trae
+`issueKey` y `/tally-push` sube el worklog a esa tarjeta en vez de crear otra.
+`tally link` con el worklog la deja registrada como cualquier otra.
+
+`tally issue fill <entryId>` escribe el texto. Con `--summary` o
+`--description` (texto o `@archivo`) es el texto del agente y siempre se
+escribe. Sin texto arma uno determinista con la nota de inkwell, los archivos
+que tocó la entrada y los commits de los repositorios del proyecto entre el
+inicio y el fin; nunca pisa un texto del agente.
 
 ### `summary`
 
@@ -267,8 +305,15 @@ tally overtime exclude add PP
 
 ## Eventos de bita
 
-`tally setup` suscribe tally a los eventos `delete` y `merge` de bita (por el
-registro de kit, comando `tally bita-hook`):
+`tally setup` suscribe tally a los eventos `start`, `stop`, `delete` y `merge`
+de bita (por el registro de kit, comando `tally bita-hook`):
+
+- **start**: si el proyecto tiene `tally map auto <id> on`, o el cronómetro se
+  arrancó con `bita start --jira`, abre la tarjeta (`tally issue open`). Con
+  `--no-jira` nunca. Si falta elegir proyecto o Historia, la entrada queda en
+  `tally issue pending` y llega una notificación de macOS.
+- **stop**: si la entrada tiene tarjeta abierta por el cronómetro, la rellena
+  sin texto (`tally issue fill`), salvo que el agente ya la haya escrito.
 
 - **delete**: el registro de la entrada borrada (y de sus bloques) se conserva
   como huérfano, para no perder la historia, y deja de contar: un id que bita
@@ -290,7 +335,7 @@ registro de kit, comando `tally bita-hook`):
 ## Capacidades
 
 `tally capabilities --json` anuncia `timesheet.summary`, `timesheet.status`,
-`timesheet.map`, `timesheet.link` y `timesheet.overtime`. Cualquier herramienta puede encontrar tally con kit
+`timesheet.map`, `timesheet.link`, `timesheet.overtime` y `timesheet.issue`. Cualquier herramienta puede encontrar tally con kit
 (`findTool('tally', { capability: 'timesheet.summary' })`) y llamarlo con
 `--json`; la pestaña Jira de Den usa `tally summary --pending --json`, la forma completa,
 y la ventana de reportes, `tally status --json`.

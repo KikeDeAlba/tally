@@ -34,6 +34,7 @@ export interface BitaEntryDetail {
   projectName: string | null
   startedAt: string
   stoppedAt: string | null
+  touched: string[]
 }
 
 export interface BitaProject {
@@ -48,6 +49,7 @@ export interface BitaClient {
   entries(args: readonly string[]): Promise<BitaEntries>
   entry(id: number): Promise<BitaEntryDetail | null>
   projects(): Promise<BitaProject[]>
+  repos?(projectId: number): Promise<string[]>
 }
 
 function record(value: unknown): Record<string, unknown> {
@@ -159,6 +161,18 @@ export class CliBita implements BitaClient {
       projectName: text(data['projectName']),
       startedAt: text(data['startedAt']) ?? '',
       stoppedAt: text(data['stoppedAt']),
+      touched: Array.isArray(data['touched']) ? data['touched'].flatMap((item) => (typeof item === 'string' ? [item] : (text(record(item)['path']) ?? []))) : [],
+    }
+  }
+
+  async repos(projectId: number): Promise<string[]> {
+    try {
+      const { envelope } = await invokeTool(this.tool, ['project', 'repo', 'ls', '--project', String(projectId)], { timeoutMs: 30_000 })
+      if (!envelope.ok) return []
+      const repos = record(envelope.data)['repos']
+      return Array.isArray(repos) ? repos.flatMap((raw) => text(record(raw)['path']) ?? []) : []
+    } catch {
+      return []
     }
   }
 

@@ -6,7 +6,7 @@ import { defineManifest, registerTool, stableBin, unregisterTool, type ToolManif
 import { PACKAGE_ROOT, VERSION } from './version.ts'
 import { SUBSCRIBED_EVENTS } from './cli/commands/hook.ts'
 
-export const CAPABILITIES = ['timesheet.summary', 'timesheet.status', 'timesheet.map', 'timesheet.link', 'timesheet.overtime']
+export const CAPABILITIES = ['timesheet.summary', 'timesheet.status', 'timesheet.map', 'timesheet.link', 'timesheet.overtime', 'timesheet.issue']
 
 export const INSTALL_HINT = 'npm install -g @kikedealba/tally && tally setup'
 
@@ -24,6 +24,8 @@ export const CLAUDE_PERMISSIONS = [
   'Bash(tally project jira:*)',
   'Bash(tally overtime:*)',
   'Bash(tally link:*)',
+  'Bash(tally issue:*)',
+  'Bash(tally map auto:*)',
   'Bash(tally config get:*)',
   'Bash(tally capabilities:*)',
   'Bash(tally --version)',

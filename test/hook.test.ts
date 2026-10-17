@@ -67,7 +67,7 @@ test('a merge of pending entries is not a conflict, and other events are ignored
 
 test('summary lists merged entries whose blocks went to different places', () => {
   const merged = bitaEntry({ id: 10, segments: [{ id: 11, start: '2026-09-16T20:00:00Z', durationSeconds: 1800 }] })
-  const registration = (entryId: number, issueKey: string) => ({ entryId, issueKey, worklogId: null, linkedAt: AT, source: 'tally', orphanedAt: null })
+  const registration = (entryId: number, issueKey: string) => ({ entryId, issueKey, worklogId: null, linkedAt: AT, source: 'tally', orphanedAt: null, filledBy: null })
   assert.deepEqual(mergeConflicts([merged], new Map([[11, registration(11, 'PP-1')]])), [
     { entryId: 10, description: 'ajustar pipeline', issues: ['PP-1'], registeredEntryIds: [11], pendingEntryIds: [10] },
   ])

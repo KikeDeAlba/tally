@@ -43,6 +43,8 @@ invertidas: `cat > /tmp/tally-desc.md <<'MD'` … `MD`.
   `startedJira`, `startLocal`, `timeSpent`): un worklog por bloque, también los
   bloques de una entrada unificada con `bita merge`.
 - `part` (`index`, `count`): solo si el tope de 8 horas partió el título.
+- `issueKey`: solo si el grupo ya tiene tarjeta, abierta al arrancar el
+  cronómetro (`tally issue open`). No se crea otra: ver el paso 7.
 - `docs[]` (`entryId`, `path`, `sections`, `markdown`; `truncated` si no cupo:
   léelo de `path`) y `pages[]` (`pageId`, `title`, `issues`), de inkwell.
 
@@ -161,7 +163,7 @@ con `--fields summary,parent,created --limit 10`.
 ## 6. Propuesta y confirmación
 
 Una tabla, una fila por tarea: proyecto → Jira, tipo, épica e Historia (marca
-lo que se crea), sprint, resumen, worklogs, días, total y estimación. Debajo: excluido,
+lo que se crea; con `issueKey`, la tarjeta existente), sprint, resumen, worklogs, días, total y estimación. Debajo: excluido,
 solapes, conflictos, partes y fuera de Jira. Las tareas se cierran al terminar
 salvo que el usuario pida lo contrario. La confirmación va por la interfaz de
 preguntas con cuatro opciones: Confirmar y escribir · Ajustar · Ver el detalle
@@ -170,6 +172,13 @@ preguntas con cuatro opciones: Confirmar y escribir · Ajustar · Ver el detalle
 ## 7. Escribir, grupo por grupo
 
 Sin paralelismo y sin volver a preguntar. Para reuniones, ver `meetings.md`.
+
+**Grupos con `issueKey`.** La tarjeta ya existe (asignada, fechada, en el
+sprint y en curso): se saltan los pasos 1 a 3 y se va directo a estimar (paso
+4, siempre con `atl jira issue edit`), worklogs, comentario, cierre y `tally
+link` con esa key. Si la tarjeta aún dice `[WIP]` o el texto automático, se
+reescriben título y descripción con `tally issue fill <entryId> --summary
+"<summary>" --description @desc.md --json` antes del worklog.
 
 1. Si el plan crea épica o Historia, primero eso (sin asignar ni estimar).
 2. **Crear** el issue de trabajo: tipo `jiraWorkIssueTypeName` («Subtarea»)

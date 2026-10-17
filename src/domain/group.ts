@@ -107,6 +107,7 @@ function buildGroup(
   const entryIds = [...new Set(worklogs.map((slice) => slice.entryId))]
   const entriesInPart = base.entries.filter((entry) => entryIds.includes(entry.id))
   const days = [...new Set(worklogs.map((slice) => slice.localDay))].sort()
+  const issueKeys = [...new Set(entriesInPart.map((entry) => entry.issueKey).filter((key): key is string => key !== null))]
   const mode = meetingMode(base.sample.kind)
   const meetings = mode === null ? [] : entriesInPart.map((entry) => meetingInfo(entry, mode))
   const stops = entriesInPart
@@ -136,6 +137,7 @@ function buildGroup(
     splitReason: partCount > 1 ? 'max-task-hours' : 'none',
     jira,
     kind: base.sample.kind,
+    issueKey: issueKeys.length === 1 ? (issueKeys[0] ?? null) : null,
     ...(meetings[0] !== undefined ? { meeting: meetings[0], meetings } : {}),
   }
 }
