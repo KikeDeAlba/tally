@@ -1,3 +1,4 @@
+import { agents } from '@kikedealba/kit'
 import { ToolMissingError } from '@kikedealba/kit/registry'
 import { EXIT, TallyError } from '../errors.ts'
 import { CAPABILITIES } from '../setup.ts'
@@ -14,6 +15,7 @@ import { runProject } from './commands/project.ts'
 import { runBitaHook } from './commands/hook.ts'
 import { runOvertime } from './commands/overtime.ts'
 import { runIssue } from './commands/issue.ts'
+import { runPaths } from './commands/paths.ts'
 
 export const HELP = `tally ${VERSION} — bita time grouped into Jira-ready work, and what was already logged
 
@@ -54,8 +56,11 @@ Usage:
   tally config get [--json]
   tally config set-jira [--site URL] [--atl-site NAME] [--account-id ID] [--cloud-id ID] [--issue-type NAME]
   tally migrate --from-bita [--dry-run]
+  tally paths [--json]             Where tally keeps its data, its skill and the bita files it reads
+  tally paths --draft <name> [--json]
+                                   A fresh file path for a markdown draft (descriptions, comments)
   tally capabilities [--json]
-  tally setup [--agents detected|all|claude,opencode,codex,gemini] [--no-agents]
+  tally setup [--agents detected|all|${agents.AGENTS.join(',')}] [--no-agents]
   tally uninstall
   tally bita-hook < event.json     Handles bita start, stop, delete and merge events (called by bita through kit)
   tally help | --version
@@ -116,6 +121,8 @@ async function dispatch(argv: readonly string[]): Promise<number> {
       return runBitaHook(rest)
     case 'migrate':
       return runMigrate(rest)
+    case 'paths':
+      return runPaths(rest)
     case 'setup':
       return runSetup(rest)
     case 'uninstall':

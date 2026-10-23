@@ -4,9 +4,16 @@ Se lee cuando hay que escribir en Jira. Las reglas duras de `SKILL.md` valen en
 todo momento. Jira se toca solo con la CLI de atl, siempre con `--json` y con
 `--site <jiraSite>` cuando el proyecto lo trae distinto de `null`. Las
 descripciones y los comentarios van en markdown (atl los convierte a ADF); los
-textos largos se pasan con `@archivo.md`. Sin herramienta de escritura, el
-archivo se crea con un heredoc entrecomillado, que no expande `$` ni comillas
-invertidas: `cat > /tmp/tally-desc.md <<'MD'` … `MD`.
+textos largos se pasan como archivo:
+
+1. `tally paths --draft desc` imprime una ruta nueva en la carpeta temporal de
+   tally (cada llamada, otra; los borradores de más de un día se borran solos).
+2. El markdown se escribe en esa ruta con la herramienta de archivos del agente
+   (Write, write_file…), nunca con `cat`, `echo`, heredocs ni redirecciones:
+   así funciona igual en bash, PowerShell o cmd, y no se expanden `$` ni
+   comillas invertidas.
+3. Se pasa entre comillas dobles, `--description "@<ruta>"` o `--body
+   "@<ruta>"`: sin comillas, PowerShell toma `@` como splatting.
 
 ## Comandos de atl
 

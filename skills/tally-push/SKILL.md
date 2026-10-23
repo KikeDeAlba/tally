@@ -3,7 +3,7 @@ name: tally-push
 description: Sube a Jira el tiempo pendiente de bita, con confirmación
 argument-hint: "[today|yesterday|week|last-week|month|last-month | --from YYYY-MM-DD --to YYYY-MM-DD]"
 disable-model-invocation: true
-allowed-tools: Bash(tally summary:*), Bash(tally map:*), Bash(tally config:*), Bash(tally project jira:*), Bash(tally issue:*)
+allowed-tools: Bash(tally summary:*), Bash(tally map:*), Bash(tally config:*), Bash(tally project jira:*), Bash(tally issue:*), Bash(tally paths:*)
 ---
 
 Vuelca a Jira el tiempo pendiente de bita. Alcance: `$ARGUMENTS` (vacío = todo
@@ -15,7 +15,8 @@ en dos llamadas, y aquí solo se pregunta y se confirma:
 
 1. **Plan.** Llama al subagente `tally-push` con «modo plan, alcance:
    $ARGUMENTS» y la ruta de la skill `tally`: el directorio `tally` hermano del
-   directorio base de esta skill. Devuelve la propuesta (una fila por tarea) y la lista de
+   directorio base de esta skill o, si no hay directorio base, `data.skill` de
+   `tally paths --json`. Devuelve la propuesta (una fila por tarea) y la lista de
    decisiones pendientes: proyectos sin mapear con sus candidatos, épicas e
    Historias por crear, tablero o sprint cuando hay varios, conflictos, solapes y lo que queda fuera.
 2. **Decisiones.** Resuelve cada decisión con la interfaz de preguntas, todas
