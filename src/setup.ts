@@ -12,6 +12,10 @@ export const INSTALL_HINT = 'npm install -g @kikedealba/tally && tally setup'
 
 export const USER_SKILLS = ['tally-pending', 'tally-push']
 
+export const SUBAGENTS = ['tally-push']
+
+export const ANTIGRAVITY_RULES_FILE = path.join(PACKAGE_ROOT, 'antigravity', 'rules.md')
+
 export const CLAUDE_PLUGIN: agents.ClaudePluginSpec = { marketplace: 'KikeDeAlba/tally', marketplaceName: 'tally', plugin: 'tally' }
 
 export const CLAUDE_PERMISSIONS = [
@@ -27,6 +31,7 @@ export const CLAUDE_PERMISSIONS = [
   'Bash(tally issue:*)',
   'Bash(tally map auto:*)',
   'Bash(tally config get:*)',
+  'Bash(tally paths:*)',
   'Bash(tally capabilities:*)',
   'Bash(tally --version)',
 ]
@@ -64,7 +69,13 @@ export function integration(): agents.AgentIntegration {
     description: 'Time from bita grouped into Jira work through tally',
     skills: [{ name: 'tally', dir: path.join(PACKAGE_ROOT, 'skills', 'tally') }],
     userSkills: USER_SKILLS.map((name) => ({ name, dir: path.join(PACKAGE_ROOT, 'skills', name) })),
+    subagents: SUBAGENTS.map((name) => ({ name, file: path.join(PACKAGE_ROOT, 'agents', `${name}.md`) })),
   }
+}
+
+export function antigravityIntegration(): agents.AgentIntegration {
+  const { userSkills: _userSkills, ...base } = integration()
+  return { ...base, antigravity: { rules: ANTIGRAVITY_RULES_FILE } }
 }
 
 export function legacyClaudeIntegration(): agents.AgentIntegration {
@@ -102,8 +113,9 @@ export async function installAgents(selection: AgentSelection, options: agents.I
     }
     steps.push(...(await agents.installIntegration(claudePermissionsIntegration(), { ...options, agents: ['claude'] })))
   }
-  const others = targets.filter((agent) => agent !== 'claude')
+  const others = targets.filter((agent) => agent !== 'claude' && agent !== 'antigravity')
   if (others.length > 0) steps.push(...(await agents.installIntegration(integration(), { ...options, agents: others })))
+  if (targets.includes('antigravity')) steps.push(...(await agents.installIntegration(antigravityIntegration(), { ...options, agents: ['antigravity'] })))
   return steps
 }
 
@@ -112,7 +124,8 @@ export async function uninstallAgents(options: agents.InstallOptions = {}): Prom
   steps.push(...(await agents.uninstallClaudePlugin(CLAUDE_PLUGIN, options)))
   steps.push(...(await agents.removeLegacyClaude(legacyClaudeIntegration(), options)))
   steps.push(...(await agents.uninstallIntegration(claudePermissionsIntegration(), { ...options, agents: ['claude'] })))
-  steps.push(...(await agents.uninstallIntegration(integration(), { ...options, agents: agents.AGENTS.filter((agent) => agent !== 'claude') })))
+  steps.push(...(await agents.uninstallIntegration(integration(), { ...options, agents: agents.AGENTS.filter((agent) => agent !== 'claude' && agent !== 'antigravity') })))
+  steps.push(...(await agents.uninstallIntegration(antigravityIntegration(), { ...options, agents: ['antigravity'] })))
   return steps
 }
 

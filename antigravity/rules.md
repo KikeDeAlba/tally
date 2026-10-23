@@ -1,0 +1,2 @@
+Para el tiempo de bita en Jira (qué falta subir, «sube mis horas», horas extra) usa la skill `tally`: tiene el procedimiento y las reglas, y nada se escribe en Jira sin confirmar la propuesta con el usuario.
+«/tally-pending [alcance]» es solo el reporte de `tally summary --pending [alcance]`; «/tally-push [alcance]» es el volcado completo de la skill `tally`, con el subagente `tally-push` si está.
