@@ -1,6 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { execFile } from 'node:child_process'
+import { existsSync } from 'node:fs'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
@@ -390,6 +391,8 @@ test('overtime checks its options before reading anything', async (t) => {
   const { env } = await sandbox(t)
   const cases = [
     ['overtime', '--salary', '1000', '--salary-stdin'],
+    ['overtime', '--salary-file', 'x.txt', '--salary-stdin'],
+    ['overtime', '--salary-file', 'no-such-salary-file.md'],
     ['overtime', '--salary', 'mucho'],
     ['overtime', '--user', 'Ana', '--account-id', 'acc-ana'],
     ['overtime', '--user', 'Ana', '--exclude', 'Interno'],
@@ -404,6 +407,36 @@ test('overtime checks its options before reading anything', async (t) => {
     assert.ok(!result.stdout.includes('mucho'))
   }
   assert.equal((await tally(['overtime', '--user', 'Ana', '--json'], env)).json.error?.code, 'ATL_MISSING')
+})
+
+test('the salary can come from a draft the agent wrote, which tally reads and removes before anything else', async (t) => {
+  const { env: base } = await sandbox(t)
+  const env = { ...base, TALLY_DRAFTS_DIR: path.join(String(base['HOME']), 'drafts') }
+  await withFakeBita(env)
+  const draft = async () => (await tally(['paths', '--draft', 'salary', '--json'], env)).json.data.draft as string
+  const file = await draft()
+  await writeFile(file, '3,200\n')
+  const argv = ['overtime', '--from', '2026-09', '--to', '2026-10', '--monthly-hours', '2', '--exclude', 'Interno', '--json']
+  const viaFile = await tally([...argv, '--salary-file', `@${file}`], env)
+  assert.equal(viaFile.code, 0, viaFile.stdout + viaFile.stderr)
+  assert.equal(existsSync(file), false)
+  const viaStdin = await tally([...argv, '--salary-stdin'], env, '3200')
+  assert.deepEqual(viaFile.json.data, viaStdin.json.data)
+  assert.equal(viaFile.json.data.rate.hourlyRate, 1600)
+  assert.ok(!viaFile.stdout.includes('3,200') && !viaFile.stderr.includes('3,200'))
+
+  const early = await draft()
+  await writeFile(early, '3200')
+  const failed = await tally(['overtime', '--site', 'otro', '--salary-file', early, '--json'], env)
+  assert.equal(failed.code, 2)
+  assert.equal(existsSync(early), false)
+
+  const victim = path.join(String(base['HOME']), 'victim.txt')
+  await writeFile(victim, '3200')
+  const outside = await tally(['overtime', '--salary-file', victim, '--json'], env)
+  assert.equal(outside.code, 2)
+  assert.equal(outside.json.error?.code, 'USAGE_ERROR')
+  assert.equal(existsSync(victim), true)
 })
 
 test('your own overtime comes from the tally estimate of your timers per month, only Jira projects', async (t) => {

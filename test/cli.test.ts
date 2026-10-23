@@ -10,6 +10,7 @@ import { DatabaseSync } from 'node:sqlite'
 import { assertConformance } from '@kikedealba/kit/conformance'
 import { defineManifest, readManifest, registerTool } from '@kikedealba/kit/registry'
 import { platformContext } from '@kikedealba/kit/platform'
+import { agents } from '@kikedealba/kit'
 import { manifest } from '../src/setup.ts'
 import { bitaEntry } from './helpers/bita-entries.ts'
 import { TEST_TZ } from './helpers/entries.ts'
@@ -335,6 +336,38 @@ test('migrate --from-bita reads the bita files named by the environment', async 
   assert.equal(usage.code, 2)
 })
 
+test('help, the setup error and the README name every agent kit knows', async (t) => {
+  const { env } = await sandbox(t)
+  const help = await tally(['help'], env)
+  assert.match(help.stdout, new RegExp(`--agents detected\\|all\\|${agents.AGENTS.join(',')}`))
+  const wrong = await tally(['setup', '--agents', 'cursor', '--json'], env)
+  assert.equal(wrong.code, 2)
+  for (const agent of agents.AGENTS) assert.ok(wrong.json.error?.message.includes(agent), agent)
+  const readme = await readFile(path.join(HERE, '..', 'README.md'), 'utf8')
+  for (const agent of agents.AGENTS) assert.ok(readme.includes(`\`${agent}\``), agent)
+})
+
+test('paths reports where tally keeps things and hands out draft files the agent writes', async (t) => {
+  const { dir, env } = await sandbox(t)
+  const drafts = path.join(dir, 'drafts')
+  const shown = await tally(['paths', '--json'], { ...env, TALLY_DRAFTS_DIR: drafts })
+  assert.equal(shown.code, 0, shown.stdout + shown.stderr)
+  assert.equal(shown.json.data.database, env['TALLY_DB_PATH'])
+  assert.equal(shown.json.data.bita.database, env['BITA_DB_PATH'])
+  assert.equal(shown.json.data.drafts, drafts)
+  assert.ok(existsSync(path.join(shown.json.data.skill, 'procedure.md')))
+
+  const draft = await tally(['paths', '--draft', 'desc', '--json'], { ...env, TALLY_DRAFTS_DIR: drafts })
+  assert.equal(draft.code, 0, draft.stdout + draft.stderr)
+  assert.equal(path.dirname(draft.json.data.draft), drafts)
+  const plain = await tally(['paths', '--draft', 'desc'], { ...env, TALLY_DRAFTS_DIR: drafts })
+  assert.notEqual(plain.stdout.trim(), draft.json.data.draft)
+  assert.ok(path.isAbsolute(plain.stdout.trim()))
+
+  const bad = await tally(['paths', '--draft', '../x', '--json'], { ...env, TALLY_DRAFTS_DIR: drafts })
+  assert.equal(bad.code, 2)
+})
+
 test('setup registers tally and installs the skill and commands in the agents', async (t) => {
   const { dir, env } = await sandbox(t)
   const result = await tally(['setup', '--agents', 'codex,gemini', '--json'], env)
@@ -344,6 +377,7 @@ test('setup registers tally and installs the skill and commands in the agents', 
   assert.deepEqual(registered?.subscribes.map((item) => [item.tool, item.events, item.command.at(-1)]), [['bita', ['delete', 'merge', 'start', 'stop'], 'bita-hook']])
   assert.ok(existsSync(path.join(dir, '.gemini', 'extensions', 'tally', 'skills', 'tally', 'SKILL.md')))
   assert.ok(existsSync(path.join(dir, '.gemini', 'extensions', 'tally', 'commands', 'tally-push.toml')))
+  assert.ok(existsSync(path.join(dir, '.gemini', 'extensions', 'tally', 'agents', 'tally-push.md')))
 
   const removed = await tally(['uninstall', '--json'], env)
   assert.equal(removed.code, 0)
