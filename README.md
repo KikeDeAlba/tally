@@ -142,7 +142,11 @@ sistema, solo del usuario; `TALLY_DRAFTS_DIR` la cambia) e imprime una ruta nuev
 `<nombre>-<aleatorio>.md`. El agente escribe ahí el markdown con su herramienta
 de archivos y lo pasa como `"@<ruta>"`, entre comillas para que PowerShell no lo
 tome como splatting. Así no hacen falta heredocs ni `/tmp`, y funciona igual en
-bash, PowerShell y cmd. Los borradores de más de un día se borran solos.
+bash, PowerShell y cmd. Los borradores de más de un día se borran solos. En Claude Code,
+`tally setup` agrega a los permisos un `Edit(//<carpeta de borradores>/**)` para
+que el agente y el subagente `tally-push` los escriban sin preguntar.
+`--salary-file` solo acepta un borrador de esa carpeta (nunca un enlace
+simbólico ni otra ruta) y lo borra en cuanto lo lee, antes de todo lo demás.
 
 Los ids de proyecto y de entrada son los de bita (`bita projects`, `bita
 entries`).

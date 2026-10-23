@@ -1,13 +1,13 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { existsSync } from 'node:fs'
-import { mkdir, mkdtemp, rm, stat, symlink, utimes, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, mkdtemp, rm, stat, symlink, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { platformContext } from '@kikedealba/kit/platform'
-import { DRAFT_MAX_AGE_MS, prepareDraft } from '../src/drafts.ts'
+import { DRAFT_MAX_AGE_MS, consumeDraft, isDraftPath, prepareDraft } from '../src/drafts.ts'
 import { bitaLocation, draftsDir } from '../src/paths.ts'
-import { notify } from '../src/cli/commands/issue.ts'
+import { NOTIFY_TIMEOUT_MS, notify } from '../src/cli/commands/issue.ts'
 
 const never = () => false
 
@@ -52,7 +52,7 @@ test('a draft is a fresh path every time, old drafts are pruned and bad names ar
   await writeFile(second, 'new')
   const old = new Date(Date.now() - DRAFT_MAX_AGE_MS - 60_000)
   await utimes(first, old, old)
-  await prepareDraft(dir, 'comment')
+  await prepareDraft(dir, 'comment', { now: Date.now() })
   assert.ok(!existsSync(first))
   assert.ok(existsSync(second))
 
@@ -67,7 +67,52 @@ test('a drafts folder that is a symlink is refused', { skip: process.platform ==
   await assert.rejects(prepareDraft(path.join(root, 'tally', 'drafts'), 'desc'), { code: 'DRAFTS_DIR_UNSAFE' })
 })
 
-test('notify stays quiet with TALLY_NO_NOTIFY', async () => {
+test('an override folder is used as given, even when its parent belongs to someone else', { skip: process.platform === 'win32' }, async (t) => {
+  const root = await mkdtemp(path.join(tmpdir(), 'tally-drafts-'))
+  t.after(() => rm(root, { recursive: true, force: true }))
+  await mkdir(path.join(root, 'real'))
+  await symlink(path.join(root, 'real'), path.join(root, 'linked'))
+  const dir = path.join(root, 'linked', 'drafts')
+  await assert.rejects(prepareDraft(dir, 'desc'), { code: 'DRAFTS_DIR_UNSAFE' })
+  assert.equal(path.dirname(await prepareDraft(dir, 'desc', { checkParent: false })), dir)
+})
+
+test('an existing drafts folder open to others is closed to the owner', { skip: process.platform === 'win32' }, async (t) => {
+  const root = await mkdtemp(path.join(tmpdir(), 'tally-drafts-'))
+  t.after(() => rm(root, { recursive: true, force: true }))
+  const dir = path.join(root, 'drafts')
+  await mkdir(dir)
+  await chmod(dir, 0o777)
+  await prepareDraft(dir, 'desc', { checkParent: false })
+  assert.equal((await stat(dir)).mode & 0o777, 0o700)
+})
+
+test('only files right inside the drafts folder are read and removed', async (t) => {
+  const root = await mkdtemp(path.join(tmpdir(), 'tally-drafts-'))
+  t.after(() => rm(root, { recursive: true, force: true }))
+  const dir = path.join(root, 'drafts')
+  const file = await prepareDraft(dir, 'salary', { checkParent: false })
+  await writeFile(file, '40000')
+  assert.equal(await consumeDraft(dir, file), '40000')
+  assert.equal(existsSync(file), false)
+
+  const victim = path.join(root, 'victim.md')
+  await writeFile(victim, 'keep')
+  for (const outside of [victim, path.join(dir, '..', 'victim.md'), path.join(dir, 'sub', 'x.md'), dir, path.join(dir, 'x.txt')]) {
+    assert.equal(isDraftPath(dir, outside), false, outside)
+    await assert.rejects(consumeDraft(dir, outside), { code: 'USAGE_ERROR' }, outside)
+  }
+  assert.equal(existsSync(victim), true)
+  if (process.platform !== 'win32') {
+    const link = path.join(dir, 'link.md')
+    await symlink(victim, link)
+    await assert.rejects(consumeDraft(dir, link), { code: 'USAGE_ERROR' })
+    assert.equal(existsSync(victim), true)
+  }
+})
+
+test('notify stays quiet with TALLY_NO_NOTIFY and never waits long', async () => {
+  assert.ok(NOTIFY_TIMEOUT_MS <= 2000)
   assert.equal(process.env['TALLY_NO_NOTIFY'], '1')
   assert.equal(await notify('tally', 'test'), false)
 })

@@ -1,6 +1,6 @@
-import { readFile, rm } from 'node:fs/promises'
 import { userInfo } from 'node:os'
 import { NotFoundError, TallyError, UsageError } from '../../errors.ts'
+import { consumeDraft } from '../../drafts.ts'
 import { formatDuration } from '../../domain/duration.ts'
 import {
   DEFAULT_CURRENCY,
@@ -22,7 +22,7 @@ import {
 import { localDay } from '../../domain/timezone.ts'
 import { requireBita, type BitaEntry } from '../../integrations/bita.ts'
 import { issueUrl, JiraReader, record, requireAtl, text, type JiraField, type JiraUser } from '../../integrations/atl.ts'
-import { configPath } from '../../paths.ts'
+import { configPath, draftsDir } from '../../paths.ts'
 import { cachedStartField, cacheStartField, excludedJiraProjects, readConfig, updateExcludedJiraProjects, type TallyConfig } from '../../state/config.ts'
 import { parseCommandArgs, readBoolean, readString, readStringList, type ParsedArgs } from '../args.ts'
 import { successEnvelope, writeErr, writeJson, writeOut } from '../output.ts'
@@ -101,23 +101,13 @@ async function readStdin(): Promise<string> {
   return Buffer.concat(chunks).toString('utf8')
 }
 
-async function readSalaryFile(file: string): Promise<string> {
-  try {
-    return await readFile(file, 'utf8')
-  } catch {
-    throw new UsageError(`Cannot read the salary file ${file}.`, 'Write the amount with the file tool in the path from "tally paths --draft salary".')
-  } finally {
-    await rm(file, { force: true }).catch(() => undefined)
-  }
-}
-
-export async function readSalary(args: ParsedArgs, stdin: () => Promise<string> = readStdin): Promise<number | null> {
+export async function readSalary(args: ParsedArgs, stdin: () => Promise<string> = readStdin, drafts: string = draftsDir()): Promise<number | null> {
   const inline = readString(args, 'salary')
   const fromStdin = readBoolean(args, 'salary-stdin')
   const file = readString(args, 'salary-file')
   if ([inline !== undefined, fromStdin, file !== undefined].filter(Boolean).length > 1) throw new UsageError('Pass the salary with only one of --salary, --salary-stdin or --salary-file.')
   if (inline === undefined && !fromStdin && file === undefined) return null
-  const raw = inline ?? (file !== undefined ? await readSalaryFile(file.startsWith('@') ? file.slice(1) : file) : await stdin())
+  const raw = inline ?? (file !== undefined ? await consumeDraft(drafts, file.startsWith('@') ? file.slice(1) : file) : await stdin())
   const value = parseAmount(raw)
   if (value === null) throw new UsageError('Invalid salary. Expected a positive amount such as 40000 or 40,000.')
   return value
@@ -403,6 +393,7 @@ export async function runOvertime(argv: readonly string[], now: Date = new Date(
   const head = argv.findIndex((arg) => !arg.startsWith('-'))
   if (head !== -1 && argv[head] === 'exclude') return runExclude([...argv.slice(0, head), ...argv.slice(head + 1)])
   const args = parseCommandArgs(argv, OVERTIME_OPTIONS)
+  const salary = await readSalary(args)
   if (args.positionals.length > 0) throw new UsageError(`Unexpected argument "${args.positionals[0]}".`, 'Run "tally help".')
   const user = readString(args, 'user')
   const accountId = readString(args, 'account-id')
@@ -419,7 +410,7 @@ export async function runOvertime(argv: readonly string[], now: Date = new Date(
   const timezone = readString(args, 'timezone') ?? (typeof config.timezone === 'string' ? config.timezone : Intl.DateTimeFormat().resolvedOptions().timeZone)
   const months = resolveMonths(args, now, timezone)
   const rate: PayRate = {
-    salary: await readSalary(args),
+    salary,
     monthlyHours: positiveNumber(args, 'monthly-hours', DEFAULT_MONTHLY_HOURS),
     multiplier: positiveNumber(args, 'multiplier', DEFAULT_MULTIPLIER),
     currency: readString(args, 'currency') ?? DEFAULT_CURRENCY,

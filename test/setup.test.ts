@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { agents } from '@kikedealba/kit'
 import { platformContext } from '@kikedealba/kit/platform'
-import { CLAUDE_PERMISSIONS, installAgents, legacyClaudeIntegration, uninstallAgents } from '../src/setup.ts'
+import { CLAUDE_PERMISSIONS, claudePathRule, draftPermissions, installAgents, legacyClaudeIntegration, uninstallAgents } from '../src/setup.ts'
 
 async function fakeHome(t: { after: (fn: () => Promise<void>) => void }) {
   const dir = await mkdtemp(path.join(tmpdir(), 'tally-setup-'))
@@ -61,6 +61,7 @@ test('setup installs the Claude Code plugin from the tally marketplace and drops
   assert.ok(existsSync(path.join(homes.claude, 'skills', 'keep.md')))
   const settings = JSON.parse(await readFile(path.join(homes.claude, 'settings.json'), 'utf8'))
   for (const rule of CLAUDE_PERMISSIONS) assert.ok(settings.permissions.allow.includes(rule))
+  for (const rule of draftPermissions(options.ctx)) assert.ok(settings.permissions.allow.includes(rule), rule)
   assert.ok(steps.every((step) => step.agent === 'claude'))
 
   calls.length = 0
@@ -74,7 +75,7 @@ test('setup installs the Claude Code plugin from the tally marketplace and drops
   await uninstallAgents(options)
   assert.deepEqual(calls.filter((args) => !args.includes('--json')), [['plugin', 'uninstall', 'tally@tally', '--scope', 'user']])
   const cleaned = JSON.parse(await readFile(path.join(homes.claude, 'settings.json'), 'utf8'))
-  assert.ok(!CLAUDE_PERMISSIONS.some((rule) => (cleaned.permissions?.allow ?? []).includes(rule)))
+  assert.ok(![...CLAUDE_PERMISSIONS, ...draftPermissions(options.ctx)].some((rule) => (cleaned.permissions?.allow ?? []).includes(rule)))
 })
 
 test('the other agents get the skill with its supporting files and the user skills as prompts, never the Claude plugin', async (t) => {
@@ -129,6 +130,13 @@ test('setup knows every agent kit knows, and claude-desktop is skipped because t
   assert.ok(!steps.some((step) => step.state === 'failed'), JSON.stringify(steps))
   for (const agent of agents.AGENTS) assert.ok(steps.some((step) => step.agent === agent), agent)
   assert.ok(steps.filter((step) => step.agent === 'claude-desktop').every((step) => step.state === 'skipped' || step.state === 'unavailable'))
+})
+
+test('claude may write the drafts without asking: an Edit rule on the drafts folder in the absolute form of each platform', () => {
+  assert.equal(claudePathRule('/var/folders/x/T/tally-501/drafts', 'darwin'), 'Edit(//var/folders/x/T/tally-501/drafts/**)')
+  assert.equal(claudePathRule('C:\\Users\\Ana\\AppData\\Local\\Temp\\tally\\drafts', 'win32'), 'Edit(//c/Users/Ana/AppData/Local/Temp/tally/drafts/**)')
+  const rules = draftPermissions(platformContext({ platform: 'linux', home: '/home/ana', env: {} }), '/tmp')
+  assert.ok(rules.every((rule) => /^Edit\(\/\/.+\/drafts\/\*\*\)$/.test(rule)), rules.join(' '))
 })
 
 test('the 0.1 files stay when the plugin could not be installed', async (t) => {

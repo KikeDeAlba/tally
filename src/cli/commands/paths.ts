@@ -1,6 +1,6 @@
 import path from 'node:path'
 import { prepareDraft } from '../../drafts.ts'
-import { bitaLocation, configPath, databasePath, draftsDir } from '../../paths.ts'
+import { bitaLocation, configPath, databasePath, draftsDir, DRAFTS_DIR_ENV_VAR } from '../../paths.ts'
 import { PACKAGE_ROOT } from '../../version.ts'
 import { parseCommandArgs, readBoolean, readString } from '../args.ts'
 import { successEnvelope, writeJson, writeOut } from '../output.ts'
@@ -14,7 +14,7 @@ export async function runPaths(argv: readonly string[]): Promise<number> {
   const name = readString(args, 'draft')
   const json = readBoolean(args, 'json')
   if (name !== undefined) {
-    const draft = await prepareDraft(draftsDir(), name)
+    const draft = await prepareDraft(draftsDir(), name, { checkParent: !process.env[DRAFTS_DIR_ENV_VAR] })
     if (json) writeJson(successEnvelope('paths', { draft }))
     else writeOut(draft)
     return 0

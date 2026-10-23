@@ -326,9 +326,11 @@ export async function fillIssue(ctx: IssueContext, entryId: number, explicit: { 
   return { entryId, issueKey, filledBy: 'auto', skipped: false, reason: null, summary: summary ?? null, description }
 }
 
+export const NOTIFY_TIMEOUT_MS = 2000
+
 export async function notify(title: string, message: string): Promise<boolean> {
   if (process.env['TALLY_NO_NOTIFY']) return false
-  return kitNotify(title, message)
+  return kitNotify(title, message, { timeoutMs: NOTIFY_TIMEOUT_MS })
 }
 
 export function pendingView(db: DatabaseSync, config: TallyConfig): { pending: PendingOpen[]; options: ProjectOption[] } {
