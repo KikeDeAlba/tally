@@ -1,6 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { execFile } from 'node:child_process'
+import { existsSync } from 'node:fs'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
@@ -390,6 +391,8 @@ test('overtime checks its options before reading anything', async (t) => {
   const { env } = await sandbox(t)
   const cases = [
     ['overtime', '--salary', '1000', '--salary-stdin'],
+    ['overtime', '--salary-file', 'x.txt', '--salary-stdin'],
+    ['overtime', '--salary-file', 'no-such-salary-file.txt'],
     ['overtime', '--salary', 'mucho'],
     ['overtime', '--user', 'Ana', '--account-id', 'acc-ana'],
     ['overtime', '--user', 'Ana', '--exclude', 'Interno'],
@@ -404,6 +407,22 @@ test('overtime checks its options before reading anything', async (t) => {
     assert.ok(!result.stdout.includes('mucho'))
   }
   assert.equal((await tally(['overtime', '--user', 'Ana', '--json'], env)).json.error?.code, 'ATL_MISSING')
+})
+
+test('the salary can come from a file the agent wrote, which tally reads and removes', async (t) => {
+  const { env } = await sandbox(t)
+  await withFakeBita(env)
+  const draft = await tally(['paths', '--draft', 'salary', '--json'], { ...env, TALLY_DRAFTS_DIR: path.join(String(env['HOME']), 'drafts') })
+  const file = draft.json.data.draft as string
+  await writeFile(file, '3,200\n')
+  const base = ['overtime', '--from', '2026-09', '--to', '2026-10', '--monthly-hours', '2', '--exclude', 'Interno', '--json']
+  const viaFile = await tally([...base, '--salary-file', `@${file}`], env)
+  assert.equal(viaFile.code, 0, viaFile.stdout + viaFile.stderr)
+  assert.equal(existsSync(file), false)
+  const viaStdin = await tally([...base, '--salary-stdin'], env, '3200')
+  assert.deepEqual(viaFile.json.data, viaStdin.json.data)
+  assert.equal(viaFile.json.data.rate.hourlyRate, 1600)
+  assert.ok(!viaFile.stdout.includes('3,200') && !viaFile.stderr.includes('3,200'))
 })
 
 test('your own overtime comes from the tally estimate of your timers per month, only Jira projects', async (t) => {

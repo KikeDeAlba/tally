@@ -45,7 +45,7 @@ Usage:
   tally link <entryIds...> --issue KEY [--worklog ID] [--force]
   tally link <entryIds...> --unlink
   tally project jira <id|key|name> [on|off]   Whether a bita project's time goes to Jira
-  tally overtime [--month YYYY-MM | --from YYYY-MM [--to YYYY-MM]] [--salary N | --salary-stdin]
+  tally overtime [--month YYYY-MM | --from YYYY-MM [--to YYYY-MM]] [--salary N | --salary-stdin | --salary-file PATH]
                  [--monthly-hours 160] [--multiplier 2] [--currency MXN] [--json]
                  [--exclude <bita project>]... [--include-running]
                                    Your overtime from your timers (tally estimate per month)

@@ -20,10 +20,12 @@ medidas: nada de estimar desde commits.
 - **Balance por proyecto** («cuánto llevo subido este mes», «cuánto estimado
   llevo»): `tally status month` (trae `estimateSeconds` por proyecto).
 - **Horas extra** («¿cuántas horas extra le tocan a Ana en octubre? gana
-  40,000», «mis horas extra del mes»): `tally overtime [--user "Ana"]
-  [--month 2026-10] --salary-stdin --json <<< 40000`: el sueldo va solo por la
-  entrada estándar (sin `|`), nunca en `--salary` ni repetido fuera del
-  resultado; sin sueldo, sin `--salary-stdin` (solo horas). `USER_AMBIGUOUS`: enseña
+  40,000», «mis horas extra del mes»): escribe el sueldo, solo la cifra, con
+  la herramienta de archivos en la ruta de `tally paths --draft salary` y corre
+  `tally overtime [--user "Ana"] [--month 2026-10] --salary-file "<ruta>"
+  --json` (tally lee el archivo y lo borra). El sueldo nunca va en `--salary`,
+  en un `echo` ni repetido fuera del resultado; sin sueldo, sin
+  `--salary-file` (solo horas). `USER_AMBIGUOUS`: enseña
   `data.candidates` y repite con `--account-id`. Proyectos que no cuentan:
   `tally overtime exclude add <CLAVE>`.
 - **Volcado** («sube mis horas a Jira»): el procedimiento completo de
@@ -36,9 +38,9 @@ medidas: nada de estimar desde commits.
 - Grupos de **reunión** (`kind` `remote-meeting` o `in-person-meeting`): lo que
   cambia está en [meetings.md](meetings.md).
 
-Sin bita (`BITA_MISSING`): `npm install -g @kikedealba/bita && bita setup`. Sin
-atl (`atl --version` falla): `npm install -g @kikedealba/atl && atl setup`, y
-no se escribe nada. Sin inkwell todo funciona, con títulos y sin notas.
+Sin bita (`BITA_MISSING`): `npm install -g @kikedealba/bita` y luego `bita
+setup`. Sin atl (`atl --version` falla): `npm install -g @kikedealba/atl` y
+luego `atl setup`, y no se escribe nada. Sin inkwell todo funciona, con títulos y sin notas.
 
 ## Flujo en breve
 

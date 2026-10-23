@@ -73,7 +73,8 @@ test('the tally-push subagent is limited to Bash, Read and Write and uses the br
 test('markdown drafts come from tally paths --draft and are written with the file tool, never with a shell heredoc', () => {
   for (const file of pluginMarkdown()) {
     const text = read(file)
-    assert.doesNotMatch(text, /<<'?[A-Z]+'?|cat >|\/tmp\//, `${file} writes files through the shell`)
+    assert.doesNotMatch(text, /<<'?[A-Z]+'?|<<<|cat >|\/tmp\/|\$\(|^\s*export /m, `${file} relies on a bash-only construct`)
+    assert.doesNotMatch(text.replaceAll('`&&`', ''), /&&/, `${file} chains commands with &&, which PowerShell 5 rejects`)
   }
   for (const file of [path.join('skills', 'tally', 'procedure.md'), path.join('agents', 'tally-push.md')]) {
     const text = read(...file.split(path.sep))

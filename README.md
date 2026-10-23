@@ -68,8 +68,8 @@ Jira se toca solo con la CLI de atl. Las reglas de redacción viven en inkwell
 (`inkwell guide writing`); la skill guarda solo un resumen mínimo para cuando
 inkwell no está. Grabar y consultar reuniones es de recap.
 
-Hace falta Node 24 o superior, y bita instalado (`npm install -g @kikedealba/bita
-&& bita setup`).
+Hace falta Node 24 o superior, y bita instalado (`npm install -g @kikedealba/bita`
+y luego `bita setup`).
 
 ### Si venías de bita 0.x
 
@@ -98,7 +98,7 @@ tally summary --from 2026-10-01 --to 2026-10-09
 tally groups --pending --json                # alias de summary
 tally status month                           # subido, pendiente, excluido y fuera de Jira por proyecto
 tally status --last-days 30 --project 789 --entries --json
-tally overtime --month 2026-10 --salary-stdin  # horas extra del mes (sueldo por stdin)
+tally overtime --month 2026-10 --salary-file "<ruta>"  # horas extra del mes (sueldo en un borrador)
 
 tally map list
 tally map set <projectId> <JIRAKEY> --parent <JIRAKEY-123>   # siempre a esa épica
@@ -277,8 +277,11 @@ Horas extra por mes, para ti o para un compañero, con la misma fórmula:
 - pago ×1 = horas extra × hora; pago ×N = pago ×1 × `--multiplier` (2).
 
 El sueldo se da en cada consulta y nunca se guarda ni se escribe en logs:
-`--salary-stdin` lo lee de la entrada estándar (así no aparece en la lista de
-procesos; es lo que usan Den y la skill) o `--salary N`. Sin sueldo salen solo
+`--salary-file <ruta>` lo lee de un archivo y lo borra (es lo que usa la skill:
+el agente escribe la cifra con su herramienta de archivos en la ruta de `tally
+paths --draft salary`, sin shell de por medio), `--salary-stdin` lo lee de la
+entrada estándar (lo que usa Den) o `--salary N`. Los dos primeros no dejan el
+sueldo en la lista de procesos. Sin sueldo salen solo
 las horas y los montos van en `null`. Los meses: `--month YYYY-MM` (por defecto
 el actual) o `--from YYYY-MM [--to YYYY-MM]`.
 
@@ -320,7 +323,7 @@ van en `null`. En texto, las claves son enlaces clicables (OSC 8) solo en una
 terminal interactiva, sin `NO_COLOR` ni `TERM=dumb`.
 
 ```sh
-tally overtime --month 2026-10 --salary-stdin --json < sueldo.txt
+tally overtime --month 2026-10 --salary-file "<ruta de tally paths --draft salary>" --json
 tally overtime --user "Ana" --from 2026-08 --to 2026-10
 tally overtime exclude add PP
 ```

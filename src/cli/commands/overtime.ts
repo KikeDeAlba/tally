@@ -1,3 +1,4 @@
+import { readFile, rm } from 'node:fs/promises'
 import { userInfo } from 'node:os'
 import { NotFoundError, TallyError, UsageError } from '../../errors.ts'
 import { formatDuration } from '../../domain/duration.ts'
@@ -38,6 +39,7 @@ const OVERTIME_OPTIONS = {
   'start-field': { type: 'string' as const },
   salary: { type: 'string' as const },
   'salary-stdin': { type: 'boolean' as const, default: false },
+  'salary-file': { type: 'string' as const },
   'monthly-hours': { type: 'string' as const },
   multiplier: { type: 'string' as const },
   currency: { type: 'string' as const },
@@ -93,18 +95,30 @@ function positiveNumber(args: ParsedArgs, name: string, fallback: number): numbe
 }
 
 async function readStdin(): Promise<string> {
-  if (process.stdin.isTTY) throw new UsageError('--salary-stdin reads the salary from standard input; pipe or redirect it, e.g. <<< 40000.')
+  if (process.stdin.isTTY) throw new UsageError('--salary-stdin reads the salary from standard input; pipe or redirect it, or use --salary-file.')
   const chunks: Buffer[] = []
   for await (const chunk of process.stdin) chunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : (chunk as Buffer))
   return Buffer.concat(chunks).toString('utf8')
 }
 
+async function readSalaryFile(file: string): Promise<string> {
+  try {
+    return await readFile(file, 'utf8')
+  } catch {
+    throw new UsageError(`Cannot read the salary file ${file}.`, 'Write the amount with the file tool in the path from "tally paths --draft salary".')
+  } finally {
+    await rm(file, { force: true }).catch(() => undefined)
+  }
+}
+
 export async function readSalary(args: ParsedArgs, stdin: () => Promise<string> = readStdin): Promise<number | null> {
   const inline = readString(args, 'salary')
   const fromStdin = readBoolean(args, 'salary-stdin')
-  if (inline !== undefined && fromStdin) throw new UsageError('Pass the salary with --salary or --salary-stdin, not both.')
-  if (inline === undefined && !fromStdin) return null
-  const value = parseAmount(inline ?? (await stdin()))
+  const file = readString(args, 'salary-file')
+  if ([inline !== undefined, fromStdin, file !== undefined].filter(Boolean).length > 1) throw new UsageError('Pass the salary with only one of --salary, --salary-stdin or --salary-file.')
+  if (inline === undefined && !fromStdin && file === undefined) return null
+  const raw = inline ?? (file !== undefined ? await readSalaryFile(file.startsWith('@') ? file.slice(1) : file) : await stdin())
+  const value = parseAmount(raw)
   if (value === null) throw new UsageError('Invalid salary. Expected a positive amount such as 40000 or 40,000.')
   return value
 }
@@ -362,7 +376,7 @@ function printReport(report: OvertimeReport): void {
   for (const month of report.months) {
     if (month.withoutEstimate.length > 0) writeOut(`${month.month}: ${month.withoutEstimate.length} issues without estimate (${month.withoutEstimate.map((issue) => issueLabel(issue, links)).join(', ')}).`)
   }
-  if (!paid) writeOut('Hours only; pass --salary-stdin (or --salary N) for the pay.')
+  if (!paid) writeOut('Hours only; pass --salary-file, --salary-stdin or --salary N for the pay.')
 }
 
 async function runExclude(argv: readonly string[]): Promise<number> {
