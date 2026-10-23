@@ -60,14 +60,27 @@ test('the user skills only run when the user invokes them', () => {
     assert.ok(read('skills', 'tally-push', 'SKILL.md').includes('subagente `tally-push`'))
 })
 
-test('the tally-push subagent is limited to Bash and Read and uses the brief summary', () => {
+test('the tally-push subagent is limited to Bash, Read and Write and uses the brief summary', () => {
   const { attributes, body } = agents.parseFrontmatter(read('agents', 'tally-push.md'))
   assert.equal(attributes['name'], 'tally-push')
   assert.ok((attributes['description'] ?? '').length > 0)
-  assert.deepEqual((attributes['tools'] ?? '').split(',').map((tool) => tool.trim()), ['Bash', 'Read'])
+  assert.deepEqual((attributes['tools'] ?? '').split(',').map((tool) => tool.trim()), ['Bash', 'Read', 'Write'])
   assert.ok(['sonnet', 'inherit'].includes(attributes['model'] ?? ''))
   assert.ok(body.includes('tally summary --pending --brief --json'))
   assert.ok(body.includes('tally link'))
+})
+
+test('markdown drafts come from tally paths --draft and are written with the file tool, never with a shell heredoc', () => {
+  for (const file of pluginMarkdown()) {
+    const text = read(file)
+    assert.doesNotMatch(text, /<<'?[A-Z]+'?|<<<|cat >|\/tmp\/|\$\(|^\s*export /m, `${file} relies on a bash-only construct`)
+    assert.doesNotMatch(text.replaceAll('`&&`', ''), /&&/, `${file} chains commands with &&, which PowerShell 5 rejects`)
+  }
+  for (const file of [path.join('skills', 'tally', 'procedure.md'), path.join('agents', 'tally-push.md')]) {
+    const text = read(...file.split(path.sep))
+    assert.ok(text.includes('tally paths --draft'), file)
+    assert.ok(text.includes('"@<ruta>"'), file)
+  }
 })
 
 test('Jira goes only through the atl CLI, and every JSON summary call asks for the brief shape', () => {

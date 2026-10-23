@@ -1,5 +1,6 @@
 import { userInfo } from 'node:os'
 import { NotFoundError, TallyError, UsageError } from '../../errors.ts'
+import { consumeDraft } from '../../drafts.ts'
 import { formatDuration } from '../../domain/duration.ts'
 import {
   DEFAULT_CURRENCY,
@@ -21,7 +22,7 @@ import {
 import { localDay } from '../../domain/timezone.ts'
 import { requireBita, type BitaEntry } from '../../integrations/bita.ts'
 import { issueUrl, JiraReader, record, requireAtl, text, type JiraField, type JiraUser } from '../../integrations/atl.ts'
-import { configPath } from '../../paths.ts'
+import { configPath, draftsDir } from '../../paths.ts'
 import { cachedStartField, cacheStartField, excludedJiraProjects, readConfig, updateExcludedJiraProjects, type TallyConfig } from '../../state/config.ts'
 import { parseCommandArgs, readBoolean, readString, readStringList, type ParsedArgs } from '../args.ts'
 import { successEnvelope, writeErr, writeJson, writeOut } from '../output.ts'
@@ -38,6 +39,7 @@ const OVERTIME_OPTIONS = {
   'start-field': { type: 'string' as const },
   salary: { type: 'string' as const },
   'salary-stdin': { type: 'boolean' as const, default: false },
+  'salary-file': { type: 'string' as const },
   'monthly-hours': { type: 'string' as const },
   multiplier: { type: 'string' as const },
   currency: { type: 'string' as const },
@@ -93,18 +95,20 @@ function positiveNumber(args: ParsedArgs, name: string, fallback: number): numbe
 }
 
 async function readStdin(): Promise<string> {
-  if (process.stdin.isTTY) throw new UsageError('--salary-stdin reads the salary from standard input; pipe or redirect it, e.g. <<< 40000.')
+  if (process.stdin.isTTY) throw new UsageError('--salary-stdin reads the salary from standard input; pipe or redirect it, or use --salary-file.')
   const chunks: Buffer[] = []
   for await (const chunk of process.stdin) chunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : (chunk as Buffer))
   return Buffer.concat(chunks).toString('utf8')
 }
 
-export async function readSalary(args: ParsedArgs, stdin: () => Promise<string> = readStdin): Promise<number | null> {
+export async function readSalary(args: ParsedArgs, stdin: () => Promise<string> = readStdin, drafts: string = draftsDir()): Promise<number | null> {
   const inline = readString(args, 'salary')
   const fromStdin = readBoolean(args, 'salary-stdin')
-  if (inline !== undefined && fromStdin) throw new UsageError('Pass the salary with --salary or --salary-stdin, not both.')
-  if (inline === undefined && !fromStdin) return null
-  const value = parseAmount(inline ?? (await stdin()))
+  const file = readString(args, 'salary-file')
+  if ([inline !== undefined, fromStdin, file !== undefined].filter(Boolean).length > 1) throw new UsageError('Pass the salary with only one of --salary, --salary-stdin or --salary-file.')
+  if (inline === undefined && !fromStdin && file === undefined) return null
+  const raw = inline ?? (file !== undefined ? await consumeDraft(drafts, file.startsWith('@') ? file.slice(1) : file) : await stdin())
+  const value = parseAmount(raw)
   if (value === null) throw new UsageError('Invalid salary. Expected a positive amount such as 40000 or 40,000.')
   return value
 }
@@ -362,7 +366,7 @@ function printReport(report: OvertimeReport): void {
   for (const month of report.months) {
     if (month.withoutEstimate.length > 0) writeOut(`${month.month}: ${month.withoutEstimate.length} issues without estimate (${month.withoutEstimate.map((issue) => issueLabel(issue, links)).join(', ')}).`)
   }
-  if (!paid) writeOut('Hours only; pass --salary-stdin (or --salary N) for the pay.')
+  if (!paid) writeOut('Hours only; pass --salary-file, --salary-stdin or --salary N for the pay.')
 }
 
 async function runExclude(argv: readonly string[]): Promise<number> {
@@ -389,6 +393,7 @@ export async function runOvertime(argv: readonly string[], now: Date = new Date(
   const head = argv.findIndex((arg) => !arg.startsWith('-'))
   if (head !== -1 && argv[head] === 'exclude') return runExclude([...argv.slice(0, head), ...argv.slice(head + 1)])
   const args = parseCommandArgs(argv, OVERTIME_OPTIONS)
+  const salary = await readSalary(args)
   if (args.positionals.length > 0) throw new UsageError(`Unexpected argument "${args.positionals[0]}".`, 'Run "tally help".')
   const user = readString(args, 'user')
   const accountId = readString(args, 'account-id')
@@ -405,7 +410,7 @@ export async function runOvertime(argv: readonly string[], now: Date = new Date(
   const timezone = readString(args, 'timezone') ?? (typeof config.timezone === 'string' ? config.timezone : Intl.DateTimeFormat().resolvedOptions().timeZone)
   const months = resolveMonths(args, now, timezone)
   const rate: PayRate = {
-    salary: await readSalary(args),
+    salary,
     monthlyHours: positiveNumber(args, 'monthly-hours', DEFAULT_MONTHLY_HOURS),
     multiplier: positiveNumber(args, 'multiplier', DEFAULT_MULTIPLIER),
     currency: readString(args, 'currency') ?? DEFAULT_CURRENCY,

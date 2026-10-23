@@ -34,7 +34,17 @@ tally setup
   quitan, y se conservan los permisos de `tally summary`, `tally link` y
   compañía. Para que el cambio surta efecto hay que reiniciar Claude Code.
 - **OpenCode, Codex y Gemini CLI** reciben la skill `tally` con sus archivos de
-  apoyo y `/tally-pending` y `/tally-push` en el formato de cada uno.
+  apoyo, `/tally-pending` y `/tally-push` en el formato de cada uno y el
+  subagente `tally-push`.
+- **Antigravity CLI** (`agy`) recibe un plugin con la skill `tally`, el
+  subagente `tally-push` y una regla `always_on` corta que lleva a la skill;
+  `agy` no tiene comandos, así que `/tally-pending` y `/tally-push` se piden
+  con palabras.
+- **Claude Desktop** no recibe nada: tally no tiene servidor MCP, y el paso
+  sale como `skipped`.
+
+`--agents` acepta `claude`, `opencode`, `codex`, `gemini`, `antigravity` y
+`claude-desktop` (los nombres de `agents.AGENTS` de kit), separados por comas.
 
 ### El plugin de Claude Code
 
@@ -50,7 +60,7 @@ con:
 | `skills/tally/SKILL.md` | La skill: cuándo usarla, el flujo en breve y las reglas duras | Su descripción, siempre; el cuerpo (menos de 150 líneas), al usarla |
 | `skills/tally/procedure.md` | El procedimiento completo del volcado | Solo cuando se lee para escribir en Jira |
 | `skills/tally/meetings.md` | Lo que cambia en los grupos de reunión | Solo si hay reuniones |
-| `agents/tally-push.md` | Subagente (Bash y Read) que hace todo el volcado con tally y atl | Trabaja en su propia ventana y devuelve solo la tabla de lo creado |
+| `agents/tally-push.md` | Subagente (terminal, leer y escribir archivos) que hace todo el volcado con tally y atl | Trabaja en su propia ventana y devuelve solo la tabla de lo creado |
 | `skills/tally-pending` | `/tally-pending`: lo que falta subir, sin escribir nada | Nada hasta que el usuario lo escribe |
 | `skills/tally-push` | `/tally-push`: plan del subagente, decisiones y una sola confirmación, y escritura | Nada hasta que el usuario lo escribe |
 
@@ -58,8 +68,8 @@ Jira se toca solo con la CLI de atl. Las reglas de redacción viven en inkwell
 (`inkwell guide writing`); la skill guarda solo un resumen mínimo para cuando
 inkwell no está. Grabar y consultar reuniones es de recap.
 
-Hace falta Node 24 o superior, y bita instalado (`npm install -g @kikedealba/bita
-&& bita setup`).
+Hace falta Node 24 o superior, y bita instalado (`npm install -g @kikedealba/bita`
+y luego `bita setup`).
 
 ### Si venías de bita 0.x
 
@@ -88,7 +98,7 @@ tally summary --from 2026-10-01 --to 2026-10-09
 tally groups --pending --json                # alias de summary
 tally status month                           # subido, pendiente, excluido y fuera de Jira por proyecto
 tally status --last-days 30 --project 789 --entries --json
-tally overtime --month 2026-10 --salary-stdin  # horas extra del mes (sueldo por stdin)
+tally overtime --month 2026-10 --salary-file "<ruta>"  # horas extra del mes (sueldo en un borrador)
 
 tally map list
 tally map set <projectId> <JIRAKEY> --parent <JIRAKEY-123>   # siempre a esa épica
@@ -101,7 +111,7 @@ tally map unset <projectId>
 
 tally issue open 12 --json                   # tarjeta de Jira para la entrada 12 de bita
 tally issue open 12 --jira-project PP        # a otro proyecto de Jira (o uno sin mapeo)
-tally issue fill 12 --description @resumen.md  # texto del agente
+tally issue fill 12 --description "@<ruta>"  # texto del agente, en un borrador de tally paths --draft
 tally issue fill 12                          # texto automático: nota, archivos y commits
 tally issue show 12 --json                   # su tarjeta, o null (no toca Jira)
 tally issue pending                          # entradas que esperan que elijas proyecto
@@ -121,6 +131,22 @@ y los que tally tiene marcados), y cada fila lleva `jira: true|false`.
 tally config get
 tally config set-jira --account-id <id> --atl-site <sitio> --issue-type Tarea
 ```
+
+```sh
+tally paths                 # base, config, skill, borradores y archivos de bita
+tally paths --draft desc    # ruta nueva para un borrador en markdown
+```
+
+`tally paths --draft <nombre>` crea la carpeta de borradores (en la temporal del
+sistema, solo del usuario; `TALLY_DRAFTS_DIR` la cambia) e imprime una ruta nueva
+`<nombre>-<aleatorio>.md`. El agente escribe ahí el markdown con su herramienta
+de archivos y lo pasa como `"@<ruta>"`, entre comillas para que PowerShell no lo
+tome como splatting. Así no hacen falta heredocs ni `/tmp`, y funciona igual en
+bash, PowerShell y cmd. Los borradores de más de un día se borran solos. En Claude Code,
+`tally setup` agrega a los permisos un `Edit(//<carpeta de borradores>/**)` para
+que el agente y el subagente `tally-push` los escriban sin preguntar.
+`--salary-file` solo acepta un borrador de esa carpeta (nunca un enlace
+simbólico ni otra ruta) y lo borra en cuanto lo lee, antes de todo lo demás.
 
 Los ids de proyecto y de entrada son los de bita (`bita projects`, `bita
 entries`).
@@ -255,8 +281,11 @@ Horas extra por mes, para ti o para un compañero, con la misma fórmula:
 - pago ×1 = horas extra × hora; pago ×N = pago ×1 × `--multiplier` (2).
 
 El sueldo se da en cada consulta y nunca se guarda ni se escribe en logs:
-`--salary-stdin` lo lee de la entrada estándar (así no aparece en la lista de
-procesos; es lo que usan Den y la skill) o `--salary N`. Sin sueldo salen solo
+`--salary-file <ruta>` lo lee de un archivo y lo borra (es lo que usa la skill:
+el agente escribe la cifra con su herramienta de archivos en la ruta de `tally
+paths --draft salary`, sin shell de por medio), `--salary-stdin` lo lee de la
+entrada estándar (lo que usa Den) o `--salary N`. Los dos primeros no dejan el
+sueldo en la lista de procesos. Sin sueldo salen solo
 las horas y los montos van en `null`. Los meses: `--month YYYY-MM` (por defecto
 el actual) o `--from YYYY-MM [--to YYYY-MM]`.
 
@@ -298,7 +327,7 @@ van en `null`. En texto, las claves son enlaces clicables (OSC 8) solo en una
 terminal interactiva, sin `NO_COLOR` ni `TERM=dumb`.
 
 ```sh
-tally overtime --month 2026-10 --salary-stdin --json < sueldo.txt
+tally overtime --month 2026-10 --salary-file "<ruta de tally paths --draft salary>" --json
 tally overtime --user "Ana" --from 2026-08 --to 2026-10
 tally overtime exclude add PP
 ```
@@ -311,7 +340,8 @@ de bita (por el registro de kit, comando `tally bita-hook`):
 - **start**: si el proyecto tiene `tally map auto <id> on`, o el cronómetro se
   arrancó con `bita start --jira`, abre la tarjeta (`tally issue open`). Con
   `--no-jira` nunca. Si falta elegir proyecto o Historia, la entrada queda en
-  `tally issue pending` y llega una notificación de macOS.
+  `tally issue pending` y llega una notificación del sistema (macOS, Linux con
+  `notify-send` o Windows; `TALLY_NO_NOTIFY=1` la apaga).
 - **stop**: si la entrada tiene tarjeta abierta por el cronómetro, la rellena
   sin texto (`tally issue fill`), salvo que el agente ya la haya escrito.
 
@@ -331,6 +361,13 @@ de bita (por el registro de kit, comando `tally bita-hook`):
 | Mapeos, proyectos fuera de Jira, temas, datos de Jira y excluidos de horas extra | `~/.config/tally/config.json` (Windows: `%APPDATA%\tally\config.json`) | `TALLY_CONFIG_PATH` |
 
 `XDG_DATA_HOME` y `XDG_CONFIG_HOME` se respetan.
+
+Los archivos de bita que lee `tally migrate --from-bita` salen de las carpetas de
+kit para bita: `${XDG_DATA_HOME:-~/.local/share}/bita/bita.db` y
+`~/.config/bita/config.json` (Windows: `%LOCALAPPDATA%\bita\bita.db` y
+`%APPDATA%\bita\config.json`). Si ahí no hay nada se usa la otra ruta conocida
+(`~/.local/share/bita` en Windows, `${XDG_CONFIG_HOME}/bita` en unix).
+`BITA_DB_PATH` y `BITA_CONFIG_PATH` mandan sobre todo.
 
 ## Capacidades
 
