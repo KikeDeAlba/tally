@@ -107,7 +107,8 @@ test('antigravity gets a plugin with the skill, the subagent and a short always-
   assert.ok(!steps.some((step) => step.state === 'failed' || step.state === 'unavailable'), JSON.stringify(steps))
   assert.ok(steps.every((step) => step.agent === 'antigravity'))
   assert.ok(!steps.some((step) => step.item === 'commands'))
-  const root = path.join(dir, 'data', 'kikedealba', 'agents', 'antigravity', 'tally')
+  const root = steps.find((step) => step.item === 'plugin')?.path ?? ''
+  assert.ok(root.startsWith(dir) && root.endsWith(path.join('antigravity', 'tally')), root)
   for (const file of ['SKILL.md', 'procedure.md', 'meetings.md']) assert.ok(existsSync(path.join(root, 'skills', 'tally', file)), file)
   assert.ok(!existsSync(path.join(root, 'skills', 'tally-push')))
   assert.ok(!existsSync(path.join(root, 'skills', 'tally-pending')))
