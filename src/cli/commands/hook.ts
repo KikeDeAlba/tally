@@ -98,7 +98,7 @@ export async function handleTimerEvent(ctx: IssueContext, document: Record<strin
     } catch (error) {
       if (error instanceof TallyError && (error.code === 'NEEDS_PROJECT' || error.code === 'NEEDS_STORY')) {
         addPendingOpen(ctx.db, { entryId: entry.id, projectId: entry.projectId, description: entry.description, reason: error.code === 'NEEDS_PROJECT' ? 'project' : 'story', requestedAt: ctx.now.toISOString() })
-        notify('tally', `#${entry.id} ${entry.description || 'sin título'}: elige el proyecto de Jira (tally issue pending)`)
+        await notify('tally', `#${entry.id} ${entry.description || 'sin título'}: elige el proyecto de Jira (tally issue pending)`)
         return outcome('pending', null, error.code)
       }
       throw error

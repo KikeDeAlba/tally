@@ -1,4 +1,5 @@
-import { execFile, spawn } from 'node:child_process'
+import { execFile } from 'node:child_process'
+import { notify as kitNotify } from '@kikedealba/kit/platform'
 import { existsSync, readFileSync } from 'node:fs'
 import type { DatabaseSync } from 'node:sqlite'
 import { DEFAULT_FLAT_ISSUE_TYPE, DEFAULT_START_DATE_FIELD, DEFAULT_WORK_ISSUE_TYPE } from '../../constants.ts'
@@ -325,15 +326,9 @@ export async function fillIssue(ctx: IssueContext, entryId: number, explicit: { 
   return { entryId, issueKey, filledBy: 'auto', skipped: false, reason: null, summary: summary ?? null, description }
 }
 
-export function notify(title: string, message: string): void {
-  if (process.platform !== 'darwin' || process.env['TALLY_NO_NOTIFY']) return
-  try {
-    const child = spawn('osascript', ['-e', `display notification ${JSON.stringify(message)} with title ${JSON.stringify(title)}`], { detached: true, stdio: 'ignore' })
-    child.on('error', () => undefined)
-    child.unref()
-  } catch {
-    return
-  }
+export async function notify(title: string, message: string): Promise<boolean> {
+  if (process.env['TALLY_NO_NOTIFY']) return false
+  return kitNotify(title, message)
 }
 
 export function pendingView(db: DatabaseSync, config: TallyConfig): { pending: PendingOpen[]; options: ProjectOption[] } {
