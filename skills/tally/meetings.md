@@ -1,7 +1,7 @@
 # Grupos de reunión
 
 Grabar, consultar y rehacer minutas es de **recap** (skill `recap`). Aquí solo
-está lo que cambia al volcar un grupo con `kind` `remote-meeting` o
+está lo que cambia al volcar un grupo con `kind` `meeting`, `remote-meeting` o
 `in-person-meeting`. Todo lo demás sigue `procedure.md`: asignado, fecha de
 inicio, estimación, worklogs, cierre, `tally link` e `inkwell page link`.
 

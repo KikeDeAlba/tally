@@ -211,7 +211,9 @@ La forma compacta, la que piden siempre la skill y el subagente. Con `--json`:
 - `data.groups[]`: `summary`, `projectId`, `jira`, `kind`, `totalHuman`,
   `estimateHuman`, `days`, `entryIds`, `worklogs[]` (`entryId`, `startedJira`,
   `startLocal`, `timeSpent`), `part` (`index`, `count`, solo si el tope de 8
-  horas partió el título), `meetings[]` (solo reuniones), `docs[]` (`entryId`,
+  horas partió el título), `meetings[]` (solo reuniones; `kind` `meeting`,
+  `remote-meeting` o `in-person-meeting`, y `mode` `meeting`, `remote` o
+  `in-person`), `docs[]` (`entryId`,
   `path`, `sections`, `markdown`, y `truncated`/`missing` cuando aplican) y
   `pages[]` (`pageId`, `title`, `issues`).
 - `data.projects[projectId]`: el destino en Jira una sola vez por proyecto en
@@ -372,7 +374,10 @@ kit para bita: `${XDG_DATA_HOME:-~/.local/share}/bita/bita.db` y
 ## Capacidades
 
 `tally capabilities --json` anuncia `timesheet.summary`, `timesheet.status`,
-`timesheet.map`, `timesheet.link`, `timesheet.overtime` y `timesheet.issue`. Cualquier herramienta puede encontrar tally con kit
+`timesheet.map`, `timesheet.link`, `timesheet.overtime`, `timesheet.issue` y
+`timesheet.meeting-kind`. Con `timesheet.meeting-kind` tally trata como
+reunión el tipo `meeting` de bita, además de `remote-meeting` e
+`in-person-meeting`. Cualquier herramienta puede encontrar tally con kit
 (`findTool('tally', { capability: 'timesheet.summary' })`) y llamarlo con
 `--json`; la pestaña Jira de Den usa `tally summary --pending --json`, la forma completa,
 y la ventana de reportes, `tally status --json`.
