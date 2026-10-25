@@ -213,9 +213,9 @@ La forma compacta, la que piden siempre la skill y el subagente. Con `--json`:
   `startLocal`, `timeSpent`), `part` (`index`, `count`, solo si el tope de 8
   horas partió el título), `meetings[]` (solo reuniones; `kind` `meeting`,
   `remote-meeting` o `in-person-meeting`, y `mode` `meeting`, `remote` o
-  `in-person`), `docs[]` (`entryId`,
-  `path`, `sections`, `markdown`, y `truncated`/`missing` cuando aplican) y
-  `pages[]` (`pageId`, `title`, `issues`).
+  `in-person`), `docs[]` (`entryId`, `path`, `sections`, `markdown`, y
+  `truncated`/`missing` cuando aplican) y `pages[]` (`pageId`, `title`,
+  `issues`).
 - `data.projects[projectId]`: el destino en Jira una sola vez por proyecto en
   lugar de repetirlo en cada grupo (`jiraProjectKey`, `jiraSite`, `epicMode`,
   `hierarchy`, `jiraEpicKey`, `epicResolved`, `jiraStories`, los tipos de
