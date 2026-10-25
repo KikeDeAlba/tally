@@ -11,6 +11,7 @@ export interface GroupOptions {
 }
 
 export const MEETING_KINDS: Readonly<Record<string, MeetingMode>> = {
+  meeting: 'meeting',
   'remote-meeting': 'remote',
   'in-person-meeting': 'in-person',
 }

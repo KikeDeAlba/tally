@@ -70,7 +70,7 @@ async function sandbox(t: { after: (fn: () => Promise<void>) => void }) {
   return { dir, env }
 }
 
-async function withFakeBita(env: NodeJS.ProcessEnv, options: { inkwell?: boolean; legacy?: boolean } = {}) {
+async function withFakeBita(env: NodeJS.ProcessEnv, options: { inkwell?: boolean; legacy?: boolean; extra?: ReturnType<typeof bitaEntry>[] } = {}) {
   const ctx = platformContext({ env })
   await registerTool(defineManifest({ name: 'bita', version: '0.18.1', bin: [process.execPath, FAKE_BITA], capabilities: ['time.entries.read', 'time.entries.write', 'time.events'] }), ctx)
   if (options.inkwell) {
@@ -80,6 +80,7 @@ async function withFakeBita(env: NodeJS.ProcessEnv, options: { inkwell?: boolean
     bitaEntry({ id: 1, start: '2026-10-06T16:00:00Z', durationSeconds: 3600, segments: [{ id: 4, start: '2026-10-06T20:00:00Z', durationSeconds: 1800 }] }),
     bitaEntry({ id: 2, start: '2026-10-07T16:00:00Z', durationSeconds: 2700 }),
     bitaEntry({ id: 3, description: 'sitio de Can Doo', projectId: 900, projectName: 'Can Doo with Pet', jira: false, start: '2026-10-07T18:00:00Z', durationSeconds: 1800 }),
+    ...(options.extra ?? []),
   ].map((entry) => {
     if (options.legacy) return entry
     const { jira: _jira, registered: _registered, issueKey: _issueKey, bitaRegistered: _bitaRegistered, ...current } = entry
@@ -143,6 +144,27 @@ test('summary groups the pending entries from bita, with the notes from inkwell'
   const week = await tally(['groups', 'week', '--json'], env)
   assert.equal(week.json.ok, true)
   assert.deepEqual((await readFile(env['FAKE_BITA_LOG'] as string, 'utf8')).trim().split('\n').map((line) => JSON.parse(line) as string[]).filter((call) => call[0] === 'entries').at(-1), ['entries', 'week'])
+})
+
+test('summary --json treats the plain meeting kind as a meeting next to the old ones', async (t) => {
+  const { env } = await sandbox(t)
+  await withFakeBita(env, {
+    extra: [
+      bitaEntry({ id: 20, description: 'daily', kind: 'meeting', start: '2026-10-08T15:00:00Z', durationSeconds: 900 }),
+      bitaEntry({ id: 21, description: 'planning', kind: 'remote-meeting', start: '2026-10-08T16:00:00Z', durationSeconds: 1800 }),
+      bitaEntry({ id: 22, description: 'retro', kind: 'in-person-meeting', start: '2026-10-08T17:00:00Z', durationSeconds: 1200 }),
+    ],
+  })
+  const full = await tally(['summary', '--pending', '--no-notes', '--json'], env)
+  assert.equal(full.code, 0, full.stdout + full.stderr)
+  const modes = (body: { data?: { groups: { kind: string | null; meetings?: { entryId: number; mode: string }[] }[] } }) =>
+    Object.fromEntries((body.data?.groups ?? []).filter((group) => group.meetings).map((group) => [group.kind, group.meetings?.map((item) => [item.entryId, item.mode])]))
+  const expected = { meeting: [[20, 'meeting']], 'remote-meeting': [[21, 'remote']], 'in-person-meeting': [[22, 'in-person']] }
+  assert.deepEqual(modes(full.json), expected)
+  assert.equal(full.json.data.groups.find((group: { kind: string | null }) => group.kind === 'meeting')?.meeting?.mode, 'meeting')
+  const brief = await tally(['summary', '--pending', '--no-notes', '--brief', '--json'], env)
+  assert.equal(brief.code, 0, brief.stdout + brief.stderr)
+  assert.deepEqual(modes(brief.json), expected)
 })
 
 test('summary --brief gives the compact envelope the skill and the subagent read', async (t) => {
@@ -373,7 +395,7 @@ test('setup registers tally and installs the skill and commands in the agents', 
   const result = await tally(['setup', '--agents', 'codex,gemini', '--json'], env)
   assert.equal(result.code, 0, result.stdout + result.stderr)
   const registered = await readManifest('tally', platformContext({ env, home: dir }))
-  assert.deepEqual(registered?.capabilities, ['timesheet.summary', 'timesheet.status', 'timesheet.map', 'timesheet.link', 'timesheet.overtime', 'timesheet.issue'])
+  assert.deepEqual(registered?.capabilities, ['timesheet.summary', 'timesheet.status', 'timesheet.map', 'timesheet.link', 'timesheet.overtime', 'timesheet.issue', 'timesheet.meeting-kind'])
   assert.deepEqual(registered?.subscribes.map((item) => [item.tool, item.events, item.command.at(-1)]), [['bita', ['delete', 'merge', 'start', 'stop'], 'bita-hook']])
   assert.ok(existsSync(path.join(dir, '.gemini', 'extensions', 'tally', 'skills', 'tally', 'SKILL.md')))
   assert.ok(existsSync(path.join(dir, '.gemini', 'extensions', 'tally', 'commands', 'tally-push.toml')))

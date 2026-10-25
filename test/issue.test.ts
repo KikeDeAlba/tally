@@ -318,6 +318,7 @@ test('the story, the in-progress transition and the project options are picked d
   const mapping: ProjectMapping = { projectName: 'Plataforma', jiraProjectKey: 'PP', storiesByEpic: { '': { backend: { key: 'PP-2', summary: 'Backend', verifiedAt: '' }, soporte: { key: 'PP-3', summary: 'Soporte', verifiedAt: '' }, sesiones: { key: 'PP-4', summary: 'Sesiones', verifiedAt: '' } } } }
   assert.equal(pickStory(mapping, null), 'PP-3')
   assert.equal(pickStory(mapping, 'remote-meeting'), 'PP-4')
+  assert.equal(pickStory(mapping, 'meeting'), 'PP-4')
   assert.equal(pickStory({ ...mapping, storiesByEpic: { '': { backend: { key: 'PP-2', summary: 'Backend', verifiedAt: '' } } } }, null), 'PP-2')
   assert.equal(pickStory({ ...mapping, parentKey: 'PP-1' }, null), null)
 

@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { groupEntries } from '../src/domain/group.ts'
+import { groupEntries, meetingMode } from '../src/domain/group.ts'
 import { makeEntry, TEST_TZ } from './helpers/entries.ts'
 
 const options = { timezone: TEST_TZ }
@@ -182,6 +182,25 @@ test('a meeting and a work block with the same title are separate groups', () =>
   assert.deepEqual(work?.entryIds, [2, 3])
   assert.notEqual(meeting?.key, work?.key)
   assert.equal(work?.key, '789\u0000Sincronizar catálogo')
+})
+
+test('the plain meeting kind is a meeting with the meeting mode', () => {
+  const groups = groupEntries(
+    [
+      makeEntry({ id: 1, description: 'Daily', kind: 'meeting', start: '2026-10-08T16:00:00Z', durationSeconds: 900 }),
+      makeEntry({ id: 2, description: 'Daily', kind: 'remote-meeting', start: '2026-10-09T16:00:00Z', durationSeconds: 900 }),
+    ],
+    options,
+  )
+
+  const meeting = groups.find((group) => group.kind === 'meeting')
+  assert.deepEqual(meeting?.meeting, { entryId: 1, startedAt: meeting?.firstStart, durationSeconds: 900, mode: 'meeting' })
+  assert.deepEqual(meeting?.meetings?.map((item) => item.mode), ['meeting'])
+  assert.equal(groups.find((group) => group.kind === 'remote-meeting')?.meeting?.mode, 'remote')
+  assert.equal(meetingMode('meeting'), 'meeting')
+  assert.equal(meetingMode('in-person-meeting'), 'in-person')
+  assert.equal(meetingMode('review'), null)
+  assert.equal(meetingMode(null), null)
 })
 
 test('kinds that are not meetings group apart but carry no meeting', () => {
