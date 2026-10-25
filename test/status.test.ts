@@ -199,3 +199,14 @@ test('resolveProjectRef takes an id, a key or a name', () => {
   assert.equal(resolveProjectRef('plataforma', ENTRIES(), projects), 789)
   assert.throws(() => resolveProjectRef('nope', ENTRIES(), projects), { code: 'PROJECT_NOT_FOUND' })
 })
+
+test('status counts every meeting kind as pending time like any other entry', () => {
+  const entries = [
+    bitaEntry({ id: 1, kind: 'meeting', start: '2026-09-15T16:00:00Z', durationSeconds: 900 }),
+    bitaEntry({ id: 2, kind: 'remote-meeting', start: '2026-09-15T17:00:00Z', durationSeconds: 1800 }),
+    bitaEntry({ id: 3, kind: 'in-person-meeting', start: '2026-09-15T18:00:00Z', durationSeconds: 1200 }),
+  ]
+  const result = status(entries, { registrations: [registration(1, 'PP-1')], options: { withEntries: true } })
+  assert.deepEqual(result.data.totals, { registeredSeconds: 900, pendingSeconds: 3000, excludedSeconds: 0, nonJiraSeconds: 0, estimateSeconds: 5400 })
+  assert.deepEqual(result.data.entries?.map((entry) => [entry.entryId, entry.registered, entry.excludedReason]), [[1, true, null], [2, false, null], [3, false, null]])
+})

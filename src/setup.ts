@@ -8,7 +8,7 @@ import { PACKAGE_ROOT, VERSION } from './version.ts'
 import { draftsDir } from './paths.ts'
 import { SUBSCRIBED_EVENTS } from './cli/commands/hook.ts'
 
-export const CAPABILITIES = ['timesheet.summary', 'timesheet.status', 'timesheet.map', 'timesheet.link', 'timesheet.overtime', 'timesheet.issue']
+export const CAPABILITIES = ['timesheet.summary', 'timesheet.status', 'timesheet.map', 'timesheet.link', 'timesheet.overtime', 'timesheet.issue', 'timesheet.meeting-kind']
 
 export const INSTALL_HINT = 'npm install -g @kikedealba/tally && tally setup'
 

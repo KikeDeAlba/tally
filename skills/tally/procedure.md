@@ -43,7 +43,7 @@ textos largos se pasan como archivo:
 - `summary`: el título tal cual; va literal al issue.
 - `projectId`, `jira`, `kind` (`null`, o el tipo de entrada; las reuniones
   traen además `meetings[]` con `entryId`, `startedAt`, `durationSeconds`,
-  `mode`).
+  `mode`: `meeting`, `remote` o `in-person`).
 - `totalHuman`: lo medido, que suman los worklogs. `estimateHuman`: la
   estimación original, redondeada hacia arriba al medio punto.
 - `days[]`, `entryIds[]` (para `tally link`), `worklogs[]` (`entryId`,
