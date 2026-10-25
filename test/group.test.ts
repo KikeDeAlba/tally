@@ -203,6 +203,80 @@ test('the plain meeting kind is a meeting with the meeting mode', () => {
   assert.equal(meetingMode(null), null)
 })
 
+test('the three meeting kinds with the same title stay in separate groups, each with its own mode', () => {
+  const groups = groupEntries(
+    [
+      makeEntry({ id: 1, description: 'Daily', kind: 'meeting', start: '2026-10-08T16:00:00Z', durationSeconds: 900 }),
+      makeEntry({ id: 2, description: 'Daily', kind: 'remote-meeting', start: '2026-10-08T17:00:00Z', durationSeconds: 900 }),
+      makeEntry({ id: 3, description: 'Daily', kind: 'in-person-meeting', start: '2026-10-08T18:00:00Z', durationSeconds: 900 }),
+      makeEntry({ id: 4, description: 'Daily', start: '2026-10-08T19:00:00Z', durationSeconds: 900 }),
+    ],
+    options,
+  )
+
+  assert.equal(groups.length, 4)
+  assert.deepEqual(
+    groups.map((group) => [group.kind, group.entryIds, group.meetings?.map((item) => item.mode) ?? null]).sort((a, b) => String(a[0]).localeCompare(String(b[0]))),
+    [
+      ['in-person-meeting', [3], ['in-person']],
+      ['meeting', [1], ['meeting']],
+      [null, [4], null],
+      ['remote-meeting', [2], ['remote']],
+    ],
+  )
+})
+
+test('several entries of the plain meeting kind share one group and keep one meeting each', () => {
+  const groups = groupEntries(
+    [
+      makeEntry({ id: 1, description: 'Daily', kind: 'meeting', start: '2026-10-08T16:00:00Z', durationSeconds: 900 }),
+      makeEntry({ id: 2, description: 'daily.', kind: 'meeting', start: '2026-10-09T16:00:00Z', durationSeconds: 600 }),
+      makeEntry({ id: 3, description: 'Daily', kind: 'remote-meeting', start: '2026-10-10T16:00:00Z', durationSeconds: 300 }),
+    ],
+    { ...options, caseInsensitive: true },
+  )
+
+  const meeting = groups.find((group) => group.kind === 'meeting')
+  assert.deepEqual(meeting?.entryIds, [1, 2])
+  assert.deepEqual(meeting?.meetings?.map((item) => [item.entryId, item.mode, item.durationSeconds]), [[1, 'meeting', 900], [2, 'meeting', 600]])
+  assert.equal(meeting?.meeting?.entryId, 1)
+  assert.equal(groups.find((group) => group.kind === 'remote-meeting')?.meetings?.length, 1)
+})
+
+test('a plain meeting over the cap is split and every part keeps only its own meetings', () => {
+  const groups = groupEntries(
+    [
+      makeEntry({ id: 1, description: 'Offsite', kind: 'meeting', start: '2026-10-08T14:00:00Z', durationSeconds: 3 * 3600 }),
+      makeEntry({ id: 2, description: 'Offsite', kind: 'meeting', start: '2026-10-08T20:00:00Z', durationSeconds: 3 * 3600 }),
+    ],
+    { ...options, maxTaskSeconds: 4 * 3600 },
+  )
+
+  assert.equal(groups.length, 2)
+  for (const group of groups) {
+    assert.equal(group.kind, 'meeting')
+    assert.ok((group.meetings?.length ?? 0) > 0)
+    assert.ok(group.meetings?.every((item) => item.mode === 'meeting' && group.entryIds.includes(item.entryId)))
+  }
+  assert.deepEqual(groups.flatMap((group) => group.meetings?.map((item) => item.entryId) ?? []).sort(), [1, 2])
+})
+
+test('historical kinds keep their modes and only the exact kind names are meetings', () => {
+  assert.equal(meetingMode('remote-meeting'), 'remote')
+  assert.equal(meetingMode('in-person-meeting'), 'in-person')
+  for (const kind of ['Meeting', 'meetings', ' meeting', 'meeting ', '', 'remote', 'in-person', 'remote_meeting']) {
+    assert.equal(meetingMode(kind), null, kind)
+  }
+})
+
+test('inherited object properties are never meeting kinds', { todo: 'meetingMode reads MEETING_KINDS through the prototype chain' }, () => {
+  for (const kind of ['toString', 'constructor', '__proto__', 'hasOwnProperty']) {
+    assert.equal(meetingMode(kind), null, kind)
+    const [group] = groupEntries([makeEntry({ id: 1, kind })], options)
+    assert.equal(group?.meetings, undefined, kind)
+  }
+})
+
 test('kinds that are not meetings group apart but carry no meeting', () => {
   const groups = groupEntries([makeEntry({ id: 1, kind: 'review' }), makeEntry({ id: 2, start: '2026-09-16T19:00:00Z' })], options)
   assert.equal(groups.length, 2)

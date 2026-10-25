@@ -167,6 +167,34 @@ test('summary --json treats the plain meeting kind as a meeting next to the old 
   assert.deepEqual(modes(brief.json), expected)
 })
 
+test('capabilities lists timesheet.meeting-kind in the json and the text output', async (t) => {
+  const { env } = await sandbox(t)
+  const json = await tally(['capabilities', '--json'], env)
+  assert.equal(json.code, 0, json.stdout + json.stderr)
+  assert.ok(json.json.data.capabilities.includes('timesheet.meeting-kind'))
+  assert.equal(json.json.data.capabilities.filter((name: string) => name === 'timesheet.meeting-kind').length, 1)
+  assert.deepEqual(json.json.data.capabilities, manifest().capabilities)
+  const text = await tally(['capabilities'], env)
+  assert.equal(text.code, 0, text.stdout + text.stderr)
+  assert.ok(text.stdout.includes('timesheet.meeting-kind'))
+})
+
+test('summary --brief keeps the meetings of a plain meeting group and drops them for other kinds', async (t) => {
+  const { env } = await sandbox(t)
+  await withFakeBita(env, {
+    extra: [
+      bitaEntry({ id: 30, description: 'sync', kind: 'meeting', start: '2026-10-08T15:00:00Z', durationSeconds: 900 }),
+      bitaEntry({ id: 31, description: 'sync', kind: 'review', start: '2026-10-08T16:00:00Z', durationSeconds: 900 }),
+    ],
+  })
+  const brief = await tally(['summary', '--pending', '--no-notes', '--brief', '--json'], env)
+  assert.equal(brief.code, 0, brief.stdout + brief.stderr)
+  const groups = brief.json.data.groups as { kind: string | null; entryIds: number[]; meetings?: { entryId: number; mode: string }[] }[]
+  const meetings = groups.find((group) => group.kind === 'meeting')?.meetings
+  assert.deepEqual(meetings?.map((item) => [item.entryId, item.mode]), [[30, 'meeting']])
+  assert.equal(groups.find((group) => group.kind === 'review')?.meetings, undefined)
+})
+
 test('summary --brief gives the compact envelope the skill and the subagent read', async (t) => {
   const { env } = await sandbox(t)
   await withFakeBita(env, { inkwell: true })
