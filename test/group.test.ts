@@ -269,7 +269,7 @@ test('historical kinds keep their modes and only the exact kind names are meetin
   }
 })
 
-test('inherited object properties are never meeting kinds', { todo: 'meetingMode reads MEETING_KINDS through the prototype chain' }, () => {
+test('inherited object properties are never meeting kinds', () => {
   for (const kind of ['toString', 'constructor', '__proto__', 'hasOwnProperty']) {
     assert.equal(meetingMode(kind), null, kind)
     const [group] = groupEntries([makeEntry({ id: 1, kind })], options)

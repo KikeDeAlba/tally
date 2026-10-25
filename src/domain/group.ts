@@ -17,7 +17,7 @@ export const MEETING_KINDS: Readonly<Record<string, MeetingMode>> = {
 }
 
 export function meetingMode(kind: string | null): MeetingMode | null {
-  return kind === null ? null : (MEETING_KINDS[kind] ?? null)
+  return kind !== null && Object.hasOwn(MEETING_KINDS, kind) ? (MEETING_KINDS[kind] ?? null) : null
 }
 
 function meetingInfo(entry: EnrichedTimeEntry, mode: MeetingMode): MeetingInfo {
