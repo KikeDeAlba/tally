@@ -32,7 +32,7 @@ export interface WorklogSlice {
   partial: boolean
 }
 
-export type MeetingMode = 'remote' | 'in-person'
+export type MeetingMode = 'meeting' | 'remote' | 'in-person'
 
 export interface MeetingInfo {
   entryId: number

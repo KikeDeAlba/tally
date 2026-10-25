@@ -153,6 +153,27 @@ test('issue open creates the subtask under the cached story, in the sprint and i
   assert.ok(!after.json.data.groups.some((item: { entryIds: number[] }) => item.entryIds.includes(1)))
 })
 
+test('issue open hangs a plain meeting from the sessions story and leaves issue show unchanged', async (t) => {
+  const { env } = await sandbox(t)
+  const state = JSON.parse(await readFile(env['FAKE_BITA_STATE'] as string, 'utf8')) as { entries: unknown[] }
+  const { jira: _jira, registered: _registered, issueKey: _issueKey, bitaRegistered: _bitaRegistered, ...meeting } = bitaEntry({ id: 4, description: 'daily', kind: 'meeting', start: '2026-10-08T15:00:00Z', durationSeconds: 900 })
+  state.entries.push(meeting)
+  await writeFile(env['FAKE_BITA_STATE'] as string, JSON.stringify(state))
+  assert.equal((await tally(['map', 'set', '789', 'PP', '--no-epic'], env)).code, 0)
+  assert.equal((await tally(['map', 'story', '789', 'soporte', 'PP-10', '--no-epic'], env)).code, 0)
+  assert.equal((await tally(['map', 'story', '789', 'sesiones', 'PP-11', '--no-epic'], env)).code, 0)
+
+  const opened = await tally(['issue', 'open', '4', '--json'], env)
+  assert.equal(opened.code, 0, opened.stdout + opened.stderr)
+  assert.equal(opened.json.data.parentKey, 'PP-11')
+  const work = await tally(['issue', 'open', '1', '--json'], env)
+  assert.equal(work.json.data.parentKey, 'PP-10')
+
+  const shown = await tally(['issue', 'show', '4', '--json'], env)
+  assert.deepEqual(Object.keys(shown.json.data).sort(), ['entryId', 'filledBy', 'issueKey', 'source', 'worklogId'])
+  assert.equal(shown.json.data.entryId, 4)
+})
+
 test('issue open without a mapped project asks for one, listing the mapped Jira projects', async (t) => {
   const { env } = await sandbox(t)
   assert.equal((await tally(['map', 'set', '789', 'PP', '--hierarchy', 'flat-task'], env)).code, 0)
@@ -318,6 +339,7 @@ test('the story, the in-progress transition and the project options are picked d
   const mapping: ProjectMapping = { projectName: 'Plataforma', jiraProjectKey: 'PP', storiesByEpic: { '': { backend: { key: 'PP-2', summary: 'Backend', verifiedAt: '' }, soporte: { key: 'PP-3', summary: 'Soporte', verifiedAt: '' }, sesiones: { key: 'PP-4', summary: 'Sesiones', verifiedAt: '' } } } }
   assert.equal(pickStory(mapping, null), 'PP-3')
   assert.equal(pickStory(mapping, 'remote-meeting'), 'PP-4')
+  assert.equal(pickStory(mapping, 'meeting'), 'PP-4')
   assert.equal(pickStory({ ...mapping, storiesByEpic: { '': { backend: { key: 'PP-2', summary: 'Backend', verifiedAt: '' } } } }, null), 'PP-2')
   assert.equal(pickStory({ ...mapping, parentKey: 'PP-1' }, null), null)
 

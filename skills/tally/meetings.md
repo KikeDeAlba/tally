@@ -1,7 +1,7 @@
 # Grupos de reunión
 
 Grabar, consultar y rehacer minutas es de **recap** (skill `recap`). Aquí solo
-está lo que cambia al volcar un grupo con `kind` `remote-meeting` o
+está lo que cambia al volcar un grupo con `kind` `meeting`, `remote-meeting` o
 `in-person-meeting`. Todo lo demás sigue `procedure.md`: asignado, fecha de
 inicio, estimación, worklogs, cierre, `tally link` e `inkwell page link`.
 
@@ -15,7 +15,7 @@ inicio, estimación, worklogs, cierre, `tally link` e `inkwell page link`.
   ## Reunión
   - Fecha: <meetings[0].startedAt, en hora local>
   - Duración: <totalHuman>
-  - Modalidad: Remota | Presencial
+  - Modalidad: <Remota | Presencial; se omite con mode meeting>
 
   ## Resumen
   <resumen de la minuta>
@@ -30,7 +30,8 @@ inicio, estimación, worklogs, cierre, `tally link` e `inkwell page link`.
   Adjunta en PDF.
   ```
 
-  `mode` `remote` es Remota; `in-person`, Presencial.
+  «Modalidad» sale de `mode`: `remote` es Remota; `in-person`, Presencial.
+  Con `mode` `meeting` la línea «Modalidad» se omite por completo.
 - **Pendientes y preguntas abiertas** no van a la descripción: quedan en el
   PDF y en el backlog de inkwell, donde recap ya los dejó.
 - **Redacción**: aquí se permite el registro de acta («se acordó», «se

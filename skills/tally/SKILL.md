@@ -35,7 +35,7 @@ medidas: nada de estimar desde commits.
   la propuesta aprobada. Pásale siempre la ruta del directorio de esta skill.
   Trabaja en su propia ventana y devuelve solo la tabla de lo creado. Es lo
   mismo que hace `/tally-push`.
-- Grupos de **reunión** (`kind` `remote-meeting` o `in-person-meeting`): lo que
+- Grupos de **reunión** (`kind` `meeting`, `remote-meeting` o `in-person-meeting`): lo que
   cambia está en [meetings.md](meetings.md).
 
 Sin bita (`BITA_MISSING`): `npm install -g @kikedealba/bita` y luego `bita
